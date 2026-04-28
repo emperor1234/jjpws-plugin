@@ -34,6 +34,14 @@ require_once JJPWS_PLUGIN_DIR . 'vendor/autoload.php';
 use JJPWS\Core\Activator;
 use JJPWS\Core\Deactivator;
 use JJPWS\Core\Plugin;
+use YahnisElsts\PluginUpdateChecker\v5\PucFactory;
+
+// Auto-updater: checks GitHub Releases for new versions
+PucFactory::buildUpdateChecker(
+    'https://github.com/emperor1234/jjpws-plugin/',
+    JJPWS_PLUGIN_FILE,
+    'jjpws-booking'
+)->getVcsApi()->enableReleaseAssets();
 
 register_activation_hook( JJPWS_PLUGIN_FILE, [ Activator::class, 'activate' ] );
 register_deactivation_hook( JJPWS_PLUGIN_FILE, [ Deactivator::class, 'deactivate' ] );
