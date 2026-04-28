@@ -33,7 +33,11 @@ jobs:
       - name: PHP syntax check (all files)
         working-directory: jjpws-booking
         run: |
-          find . -name "*.php" \
-            ! -path "./vendor/*" \
-            -print0 | xargs -0 -n1 php -l | grep -v "^No syntax errors"
+          ERROR=0
+          while IFS= read -r -d '' file; do
+            php -l "$file" || ERROR=1
+          done < <(find . -name "*.php" ! -path "./vendor/*" -print0)
+          if [ "$ERROR" -eq 1 ]; then
+            echo "PHP syntax errors found." && exit 1
+          fi
           echo "All PHP files passed syntax check."

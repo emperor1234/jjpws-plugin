@@ -2,6 +2,7 @@
     "name": "jjpetwasteservices/jjpws-booking",
     "description": "Smart booking & Stripe subscription system for JJ Pet Waste Services",
     "type": "wordpress-plugin",
+    "license": "proprietary",
     "require": {
         "php": ">=8.1",
         "stripe/stripe-php": "^10.0"
