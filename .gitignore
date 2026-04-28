@@ -1,0 +1,13 @@
+# Composer
+jjpws-booking/vendor/
+jjpws-booking/composer.lock
+
+# Build artifacts
+*.zip
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

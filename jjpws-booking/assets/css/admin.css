@@ -1,0 +1,19 @@
+/* JJ Pet Waste — Admin styles (minimal, supplements booking-form.css) */
+
+.jjpws-admin-wrap { max-width: 1200px; }
+
+.jjpws-pricing-table input[type="number"] {
+    padding: 4px 6px;
+    border: 1px solid #8c8f94;
+    border-radius: 4px;
+}
+
+.jjpws-adder-table { max-width: 600px; }
+
+.jjpws-price-input {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #3c434a;
+    font-weight: 600;
+}

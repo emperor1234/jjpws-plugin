@@ -1,0 +1,101 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"   # triggers on v1.0.0, v1.2.3, etc.
+
+permissions:
+  contents: write  # needed to create GitHub Releases
+
+jobs:
+  build:
+    name: Build Plugin ZIP
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.1"
+          tools: composer:v2
+          coverage: none
+
+      - name: Validate composer.json
+        working-directory: jjpws-booking
+        run: composer validate --strict
+
+      - name: Install production dependencies
+        working-directory: jjpws-booking
+        run: |
+          composer install \
+            --no-dev \
+            --prefer-dist \
+            --optimize-autoloader \
+            --no-progress \
+            --no-interaction
+
+      - name: PHP syntax check
+        working-directory: jjpws-booking
+        run: |
+          find . -name "*.php" \
+            ! -path "./vendor/*" \
+            -print0 | xargs -0 -n1 php -l | grep -v "^No syntax errors"
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set plugin version in main file
+        run: |
+          sed -i "s/Version:     .*/Version:     ${{ steps.version.outputs.VERSION }}/" \
+            jjpws-booking/jjpws-booking.php
+          sed -i "s/define( 'JJPWS_VERSION', '.*' )/define( 'JJPWS_VERSION', '${{ steps.version.outputs.VERSION }}' )/" \
+            jjpws-booking/jjpws-booking.php
+
+      - name: Build ZIP
+        run: |
+          ZIP_NAME="jjpws-booking-${{ steps.version.outputs.VERSION }}.zip"
+          zip -r "$ZIP_NAME" jjpws-booking/ \
+            --exclude "jjpws-booking/.git*" \
+            --exclude "jjpws-booking/composer.lock" \
+            --exclude "jjpws-booking/vendor/*/Tests/*" \
+            --exclude "jjpws-booking/vendor/*/tests/*" \
+            --exclude "jjpws-booking/vendor/*/test/*" \
+            --exclude "jjpws-booking/vendor/*/*/Test*" \
+            --exclude "jjpws-booking/vendor/*/*/README*" \
+            --exclude "jjpws-booking/vendor/*/*/CHANGELOG*"
+          echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
+
+      - name: Upload ZIP as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jjpws-booking-${{ steps.version.outputs.VERSION }}
+          path: ${{ env.ZIP_NAME }}
+          retention-days: 90
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "JJ Pet Waste Booking v${{ steps.version.outputs.VERSION }}"
+          body: |
+            ## JJ Pet Waste Booking System — v${{ steps.version.outputs.VERSION }}
+
+            ### Installation
+            1. Download `jjpws-booking-${{ steps.version.outputs.VERSION }}.zip` below
+            2. WordPress Admin → Plugins → Add New → Upload Plugin
+            3. Activate and go to **JJ Pet Waste → Settings** to enter API keys
+
+            ### What's included
+            - Multi-step booking form (`[jjpws_booking_form]` shortcode)
+            - Stripe recurring subscription checkout
+            - Auto lot size detection (Regrid + Google Maps)
+            - Real-time pricing engine (configurable in WP Admin)
+            - Customer admin dashboard
+            - Self-service cancellation from My Account
+          files: ${{ env.ZIP_NAME }}
+          draft: false
+          prerelease: false

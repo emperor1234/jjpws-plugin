@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(composer install *)",
+      "Bash(where composer *)",
+      "Bash(php -r \"echo PHP_VERSION;\")",
+      "PowerShell(Get-Command composer -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command php -ErrorAction SilentlyContinue)",
+      "PowerShell(php --version 2>&1)",
+      "PowerShell(php --version)",
+      "PowerShell(composer --version)",
+      "PowerShell(Get-ChildItem \"C:\\\\\" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \"php|xampp|wamp|laragon|local\" } | Select-Object FullName)"
+    ]
+  }
+}
