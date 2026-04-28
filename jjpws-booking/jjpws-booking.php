@@ -20,6 +20,15 @@ define( 'JJPWS_PLUGIN_FILE', __FILE__ );
 define( 'JJPWS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'JJPWS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
+if ( ! file_exists( JJPWS_PLUGIN_DIR . 'vendor/autoload.php' ) ) {
+    add_action( 'admin_notices', function () {
+        echo '<div class="notice notice-error"><p><strong>JJ Pet Waste Booking:</strong> '
+            . 'Composer dependencies are missing. Please run <code>composer install</code> inside the plugin folder, '
+            . 'or re-upload the plugin using the full zip from the GitHub release.</p></div>';
+    } );
+    return;
+}
+
 require_once JJPWS_PLUGIN_DIR . 'vendor/autoload.php';
 
 use JJPWS\Core\Activator;
