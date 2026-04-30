@@ -563,6 +563,76 @@
     .jjpws-btn { justify-content: center; }
 }
 
+/* ── Price breakdown ──────────────────────────────────────────────── */
+.jjpws-price-breakdown {
+    margin-top: .8rem;
+    padding-top: .8rem;
+    border-top: 1px dashed var(--jjpws-border);
+    font-size: 13px;
+    color: var(--jjpws-muted);
+    text-align: left;
+}
+.jjpws-bd-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+}
+
+/* ── Quote prompt + quote form ────────────────────────────────────── */
+.jjpws-quote-prompt {
+    background: #fff7ed;
+    border: 1.5px solid #f59e0b;
+    border-radius: var(--jjpws-radius);
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+}
+.jjpws-quote-prompt h4 {
+    margin: 0 0 .4rem;
+    color: #92400e;
+}
+.jjpws-quote-prompt p {
+    margin: 0 0 .8rem;
+    font-size: 14px;
+}
+
+.jjpws-quote-form {
+    background: #fff;
+    padding: 2rem;
+    border-radius: var(--jjpws-radius);
+    box-shadow: var(--jjpws-shadow);
+    border: 1px solid var(--jjpws-border);
+    margin-top: 1rem;
+}
+.jjpws-quote-form textarea {
+    width: 100%;
+    padding: .65rem .85rem;
+    border: 1.5px solid var(--jjpws-border);
+    border-radius: var(--jjpws-radius);
+    font-size: 15px;
+    font-family: inherit;
+    box-sizing: border-box;
+    resize: vertical;
+}
+
+.jjpws-checkbox-row {
+    display: flex;
+    align-items: flex-start;
+    gap: .6rem;
+    cursor: pointer;
+    padding: .85rem 1rem;
+    border: 1.5px solid var(--jjpws-border);
+    border-radius: var(--jjpws-radius);
+    transition: border-color var(--jjpws-transition), background var(--jjpws-transition);
+}
+.jjpws-checkbox-row:has(input:checked) {
+    border-color: var(--jjpws-green);
+    background: var(--jjpws-green-light);
+}
+.jjpws-checkbox-row input[type="checkbox"] {
+    accent-color: var(--jjpws-green);
+    margin-top: 4px;
+}
+
 /* ── Admin styles ─────────────────────────────────────────────────── */
 .jjpws-stats {
     display: flex;

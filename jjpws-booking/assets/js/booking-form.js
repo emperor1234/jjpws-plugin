@@ -3,75 +3,73 @@
 (function () {
     'use strict';
 
-    // ── State ──────────────────────────────────────────────────────────────
     const state = {
         currentStep: 1,
-        street: '',
-        city: '',
-        state: '',
-        zip: '',
-        lat: null,
-        lng: null,
-        lotSqft: null,
-        lotCategory: null,
-        lotLabel: null,
+        // Address
+        street: '', city: '', state: '', zip: '',
+        lat: null, lng: null,
+        lotSqft: null, lotAcres: null, lotTier: null, lotLabel: null,
+        distanceMiles: null,
+        // Service
+        serviceType: 'recurring',
         dogCount: 1,
         frequency: 'weekly',
-        priceCents: null,
-        priceFormatted: null,
+        timeSinceCleaned: 'recent',
+        annualPrepay: false,
+        // Pricing
+        breakdown: null,
+        totalCents: null,
     };
 
-    // ── DOM helpers ────────────────────────────────────────────────────────
-    const $  = (id) => document.getElementById(id);
+    const $ = (id) => document.getElementById(id);
     const qS = (sel, ctx = document) => ctx.querySelector(sel);
     const qA = (sel, ctx = document) => [...ctx.querySelectorAll(sel)];
 
+    const fmt = (cents) => '$' + (cents / 100).toFixed(2);
+
     // ── Step navigation ────────────────────────────────────────────────────
     function goToStep(n) {
-        qA('.jjpws-form-step').forEach(el => {
-            el.classList.toggle('jjpws-form-step--active', +el.dataset.step === n);
-        });
+        qA('.jjpws-form-step').forEach(el => el.classList.toggle('jjpws-form-step--active', +el.dataset.step === n));
         qA('.jjpws-step').forEach(el => {
             const num = +el.dataset.step;
-            el.classList.toggle('jjpws-step--active',    num === n);
+            el.classList.toggle('jjpws-step--active', num === n);
             el.classList.toggle('jjpws-step--completed', num < n);
         });
         state.currentStep = n;
-        window.scrollTo({ top: document.getElementById('jjpws-booking-wrap')?.offsetTop - 20 ?? 0, behavior: 'smooth' });
+        const wrap = $('jjpws-booking-wrap');
+        if (wrap) window.scrollTo({ top: wrap.offsetTop - 20, behavior: 'smooth' });
     }
 
-    // ── Field helpers ──────────────────────────────────────────────────────
-    function fieldError(id, msg) {
-        const el = $(id);
-        if (el) { el.textContent = msg; }
+    function showQuoteForm(reason, prefill = {}) {
+        document.getElementById('jjpws-booking-form').style.display = 'none';
+        const wrap = document.getElementById('jjpws-quote-form');
+        wrap.style.display = 'block';
+        $('jjpws-quote-reason').value = reason || 'other';
+
+        // Prefill if we have anything
+        if (prefill.email && !$('jjpws-quote-email').value)  $('jjpws-quote-email').value  = prefill.email;
+        const wrapTop = wrap.offsetTop - 20;
+        window.scrollTo({ top: wrapTop, behavior: 'smooth' });
     }
 
-    function clearErrors() {
-        qA('.jjpws-field-error').forEach(el => (el.textContent = ''));
-        qA('.jjpws-error').forEach(el => el.classList.remove('jjpws-error'));
+    function hideQuoteForm() {
+        document.getElementById('jjpws-booking-form').style.display = '';
+        document.getElementById('jjpws-quote-form').style.display = 'none';
     }
 
-    function markError(inputId, errId, msg) {
-        const inp = $(inputId);
-        const err = $(errId);
-        if (inp) inp.classList.add('jjpws-error');
-        if (err) err.textContent = msg;
-        return false;
-    }
-
-    // ── AJAX helper ────────────────────────────────────────────────────────
+    // ── AJAX ───────────────────────────────────────────────────────────────
     async function post(action, body) {
         const fd = new FormData();
         fd.append('action', action);
         fd.append('nonce', jjpwsData.nonce);
         for (const [k, v] of Object.entries(body)) {
-            if (v !== null && v !== undefined) fd.append(k, v);
+            if (v !== null && v !== undefined && v !== '') fd.append(k, v);
         }
-        const res  = await fetch(jjpwsData.ajaxUrl, { method: 'POST', body: fd });
+        const res = await fetch(jjpwsData.ajaxUrl, { method: 'POST', body: fd });
         return res.json();
     }
 
-    // ── Lot size lookup ────────────────────────────────────────────────────
+    // ── Lot size + distance lookup ─────────────────────────────────────────
     async function lookupLotSize() {
         const street = $('jjpws-street')?.value.trim();
         const city   = $('jjpws-city')?.value.trim();
@@ -85,49 +83,104 @@
         try {
             const json = await post('jjpws_lookup_lot_size', { street, city, state: st, zip });
 
-            if (json.success && json.data.source !== 'manual_required') {
-                const d = json.data;
-                state.lotSqft     = d.lot_size_sqft;
-                state.lotCategory = d.lot_size_category;
-                state.lotLabel    = d.lot_size_label;
+            if (!json.success) {
+                showLotManual();
+                return;
+            }
+
+            const d = json.data;
+            state.distanceMiles = d.distance_miles;
+
+            // Out of range
+            if (d.out_of_range) {
+                hideLotResolved();
+                hideLotManual();
+                showQuotePrompt(
+                    'out_of_range',
+                    `Your address is approximately ${d.distance_miles} miles from us, beyond our ${d.max_miles}-mile service radius.`
+                );
+                $('jjpws-distance-miles').value = d.distance_miles ?? '';
+                return;
+            }
+
+            hideQuotePrompt();
+
+            // Lot size (auto or manual)
+            if (d.source === 'manual_required' || !d.lot_size_category) {
+                showLotManual();
+                if (d.distance_miles !== null) showDistanceOnly(d);
+            } else {
+                state.lotSqft = d.lot_size_sqft;
+                state.lotAcres = d.lot_size_acres;
+                state.lotTier = d.lot_size_category;
+                state.lotLabel = d.lot_size_label;
                 if (d.lat) state.lat = d.lat;
                 if (d.lng) state.lng = d.lng;
-                setHiddenLot(d.lot_size_category, d.lot_size_sqft);
-                showLotResolved(d.lot_size_label);
+                setHiddenLot(d);
+                showLotResolved(d);
                 hideLotManual();
-            } else {
-                showLotManual();
+
+                // 1.5+ acres → quote
+                if (d.requires_quote) {
+                    showQuotePrompt('large_lot',
+                        `Your lot is approximately ${d.lot_size_acres} acres. Lots over 1.5 acres need a custom quote.`);
+                }
             }
-        } catch {
+        } catch (e) {
+            console.error(e);
             showLotManual();
         } finally {
             showLotLoading(false);
         }
     }
 
-    function setHiddenLot(category, sqft) {
-        $('jjpws-lot-category').value = category || '';
-        $('jjpws-lot-sqft').value     = sqft     || '';
+    function setHiddenLot(d) {
+        $('jjpws-lot-category').value = d.lot_size_category || '';
+        $('jjpws-lot-sqft').value     = d.lot_size_sqft || '';
+        $('jjpws-lot-acres').value    = d.lot_size_acres || '';
+        $('jjpws-distance-miles').value = d.distance_miles ?? '';
+        if (d.lat) $('jjpws-lat').value = d.lat;
+        if (d.lng) $('jjpws-lng').value = d.lng;
     }
 
-    function showLotResolved(label) {
-        const wrap = $('jjpws-lot-resolved');
-        const txt  = $('jjpws-lot-label-text');
-        if (wrap) wrap.style.display = 'block';
-        if (txt)  txt.textContent    = label || '';
-        hideLotManual();
+    function showLotResolved(d) {
+        $('jjpws-lot-resolved').style.display = 'block';
+        const acresText = d.lot_size_acres
+            ? `${d.lot_size_acres} acres (~${d.lot_size_sqft.toLocaleString()} sq ft) — ${d.lot_size_label}`
+            : d.lot_size_label;
+        $('jjpws-lot-acres-text').textContent = acresText;
+        showDistanceOnly(d);
+    }
+
+    function showDistanceOnly(d) {
+        if (d.distance_miles === null || d.distance_miles === undefined) {
+            $('jjpws-distance-text').style.display = 'none';
+            return;
+        }
+        $('jjpws-distance-text').style.display = 'block';
+        $('jjpws-distance-value').textContent = `${d.distance_miles} miles from us`;
+        const note = $('jjpws-distance-fee-note');
+        if (d.distance_miles > d.free_miles) {
+            const extra = d.distance_miles - d.free_miles;
+            const fee = (extra * d.per_mile_cents / 100).toFixed(2);
+            note.textContent = ` (travel fee: $${fee}/visit)`;
+            note.style.display = 'inline';
+        } else {
+            note.style.display = 'none';
+        }
+    }
+
+    function hideLotResolved() {
+        $('jjpws-lot-resolved').style.display = 'none';
     }
 
     function showLotManual() {
-        const wrap = $('jjpws-lot-manual');
-        if (wrap) wrap.style.display = 'block';
-        const resolved = $('jjpws-lot-resolved');
-        if (resolved) resolved.style.display = 'none';
+        $('jjpws-lot-manual').style.display = 'block';
+        hideLotResolved();
     }
 
     function hideLotManual() {
-        const wrap = $('jjpws-lot-manual');
-        if (wrap) wrap.style.display = 'none';
+        $('jjpws-lot-manual').style.display = 'none';
     }
 
     function showLotLoading(show) {
@@ -135,7 +188,18 @@
         if (el) el.style.display = show ? 'flex' : 'none';
     }
 
-    // ── Price calculation ──────────────────────────────────────────────────
+    function showQuotePrompt(reason, message) {
+        const wrap = $('jjpws-quote-prompt');
+        wrap.style.display = 'block';
+        $('jjpws-quote-prompt-msg').textContent = message;
+        wrap.dataset.reason = reason;
+    }
+
+    function hideQuotePrompt() {
+        $('jjpws-quote-prompt').style.display = 'none';
+    }
+
+    // ── Pricing ───────────────────────────────────────────────────────────
     let priceDebounce;
 
     function schedulePriceUpdate() {
@@ -144,38 +208,118 @@
     }
 
     async function fetchPrice() {
-        const category = state.lotCategory;
-        const dogs     = state.dogCount;
-        const freq     = state.frequency;
-
-        if (!category || !dogs || !freq) return;
+        if (!state.lotTier || state.lotTier === 'large') return;
 
         const loading = $('jjpws-price-loading');
         const preview = $('jjpws-price-preview');
-        if (loading) loading.style.display = 'flex';
-        if (preview) preview.style.display = 'none';
+        const quote   = $('jjpws-step2-quote-prompt');
+
+        loading.style.display = 'flex';
+        preview.style.display = 'none';
+        quote.style.display = 'none';
 
         try {
-            const json = await post('jjpws_calculate_price', {
-                lot_size_category: category,
-                dog_count:         dogs,
-                frequency:         freq,
-            });
+            const body = {
+                service_type: state.serviceType,
+                acreage_tier: state.lotTier,
+                dog_count: state.dogCount,
+                frequency: state.frequency,
+                time_since_cleaned: state.timeSinceCleaned,
+                distance_miles: state.distanceMiles ?? 0,
+                annual_prepay: state.annualPrepay ? '1' : '0',
+            };
 
-            if (json.success) {
-                state.priceCents    = json.data.monthly_price_cents;
-                state.priceFormatted = json.data.monthly_price_formatted;
-                $('jjpws-price-cents').value   = json.data.monthly_price_cents;
-                $('jjpws-price-amount').textContent = json.data.monthly_price_formatted;
-                if (preview) preview.style.display = 'block';
+            const json = await post('jjpws_calculate_price', body);
+
+            if (!json.success) return;
+
+            if (json.data.requires_quote) {
+                state.breakdown = null;
+                state.totalCents = null;
+                $('jjpws-step2-quote-msg').textContent = json.data.reason === 'too_many_dogs'
+                    ? 'For yards with 5 or more dogs, we provide a custom quote.'
+                    : 'Your property requires a custom quote.';
+                quote.style.display = 'block';
+                return;
             }
-        } catch { /* silently fail */ }
-        finally {
-            if (loading) loading.style.display = 'none';
+
+            state.breakdown = json.data.breakdown;
+            state.totalCents = json.data.breakdown.total_cents;
+            $('jjpws-total-cents').value = state.totalCents;
+
+            renderPricePreview(json.data.breakdown);
+
+        } catch (e) {
+            console.error(e);
+        } finally {
+            loading.style.display = 'none';
         }
     }
 
-    // ── Step 1 validation + next ───────────────────────────────────────────
+    function renderPricePreview(b) {
+        const preview = $('jjpws-price-preview');
+        const label = $('jjpws-price-label');
+        const amount = $('jjpws-price-amount');
+        const breakdown = $('jjpws-price-breakdown');
+
+        if (b.service_type === 'one_time') {
+            label.textContent = 'One-Time Cleanup Total:';
+            amount.textContent = fmt(b.total_cents);
+            breakdown.innerHTML = renderBreakdownRows([
+                ['Base price', b.one_time_base_cents],
+                ['Acreage premium', b.acreage_premium_cents],
+                ['Travel fee', b.distance_fee_cents],
+                ['Neglect surcharge', b.neglect_surcharge_cents],
+            ]);
+        } else if (b.annual_prepay) {
+            label.textContent = 'Annual Prepay (10% off):';
+            amount.textContent = fmt(b.annual_total_cents);
+            breakdown.innerHTML = renderBreakdownRows([
+                ['Per-visit total', b.per_visit_total_cents],
+                ['Visits per month', b.visits_per_month, true],
+                ['Monthly total', b.monthly_cents],
+                ['Annual savings', -b.annual_savings_cents],
+                ['Neglect surcharge', b.neglect_surcharge_cents],
+            ]);
+        } else {
+            label.textContent = 'Monthly Cost:';
+            amount.textContent = fmt(b.monthly_cents);
+            breakdown.innerHTML = renderBreakdownRows([
+                ['Per visit', b.per_visit_total_cents],
+                ['Visits per month', b.visits_per_month, true],
+                ['Travel fee (monthly)', b.distance_fee_monthly],
+                ['First-month neglect surcharge', b.neglect_surcharge_cents],
+            ]);
+        }
+
+        preview.style.display = 'block';
+    }
+
+    function renderBreakdownRows(rows) {
+        return rows
+            .filter(([_, val]) => val !== 0 && val !== null && val !== undefined)
+            .map(([label, val, isCount]) => `
+                <div class="jjpws-bd-row">
+                    <span>${label}</span>
+                    <span>${isCount ? val : fmt(val)}</span>
+                </div>
+            `).join('');
+    }
+
+    // ── Validation ────────────────────────────────────────────────────────
+    function clearErrors() {
+        qA('.jjpws-field-error').forEach(el => el.textContent = '');
+        qA('.jjpws-error').forEach(el => el.classList.remove('jjpws-error'));
+    }
+
+    function markError(inputId, errId, msg) {
+        const inp = $(inputId);
+        const err = $(errId);
+        if (inp) inp.classList.add('jjpws-error');
+        if (err) err.textContent = msg;
+        return false;
+    }
+
     function validateStep1() {
         clearErrors();
         let valid = true;
@@ -185,26 +329,32 @@
         const st     = $('jjpws-state')?.value.trim();
         const zip    = $('jjpws-zip')?.value.trim();
 
-        if (!street || street.length < 5) valid = markError('jjpws-street', 'err-street', 'Please enter a valid street address.') || valid && false;
-        if (!city)  valid = markError('jjpws-city',  'err-city',  'City is required.')   || valid && false;
-        if (!st)    valid = markError('jjpws-state', 'err-state', 'State is required.')  || valid && false;
-        if (!/^\d{5}$/.test(zip)) valid = markError('jjpws-zip', 'err-zip', 'Enter a valid 5-digit ZIP code.') || valid && false;
+        if (!street || street.length < 5) valid = markError('jjpws-street', 'err-street', 'Please enter a valid street address.');
+        if (!city) { markError('jjpws-city', 'err-city', 'City is required.'); valid = false; }
+        if (!st)   { valid = false; }
+        if (!/^\d{5}$/.test(zip)) valid = false;
 
-        // Lot size check
+        // Lot tier required
         const lotCat = $('jjpws-lot-category')?.value;
         const manualVisible = $('jjpws-lot-manual')?.style.display !== 'none';
 
         if (manualVisible) {
             const sel = $('jjpws-lot-manual-select')?.value;
             if (!sel) {
-                valid = markError('jjpws-lot-manual-select', 'err-lot-manual', 'Please select your lot size.') && false;
+                markError('jjpws-lot-manual-select', 'err-lot-manual', 'Please select your lot size.');
+                valid = false;
             } else {
-                state.lotCategory = sel;
-                state.lotLabel    = jjpwsData.lotCategories[sel] || sel;
-                setHiddenLot(sel, null);
+                state.lotTier = sel;
+                $('jjpws-lot-category').value = sel;
             }
         } else if (!lotCat) {
             valid = false;
+        } else {
+            state.lotTier = lotCat;
+        }
+
+        if (state.lotTier === 'large') {
+            return false; // quote prompt shown already
         }
 
         return valid;
@@ -215,51 +365,47 @@
         state.city   = $('jjpws-city')?.value.trim();
         state.state  = $('jjpws-state')?.value.trim();
         state.zip    = $('jjpws-zip')?.value.trim();
-        state.lat    = parseFloat($('jjpws-lat')?.value) || null;
-        state.lng    = parseFloat($('jjpws-lng')?.value) || null;
-        state.lotSqft     = parseInt($('jjpws-lot-sqft')?.value) || null;
-        state.lotCategory = $('jjpws-lot-category')?.value || null;
     }
 
-    // ── Step 2 validation + next ───────────────────────────────────────────
-    function validateStep2() {
-        clearErrors();
-        let valid = true;
-
-        if (!state.dogCount || state.dogCount < 1 || state.dogCount > 10) {
-            fieldError('err-dogs', 'Dog count must be between 1 and 10.');
-            valid = false;
-        }
-
-        if (!state.frequency) {
-            fieldError('err-frequency', 'Please select a service frequency.');
-            valid = false;
-        }
-
-        if (!state.priceCents) {
-            valid = false; // price not loaded yet
-        }
-
-        return valid;
-    }
-
-    // ── Step 3 review populate ─────────────────────────────────────────────
+    // ── Review ────────────────────────────────────────────────────────────
     function populateReview() {
-        const freqLabels = {
-            twice_weekly: 'Twice a Week',
-            weekly:       'Weekly',
-            biweekly:     'Bi-Weekly',
+        const freqLabels = { twice_weekly: 'Twice a Week', weekly: 'Weekly', biweekly: 'Bi-Weekly' };
+        const timeLabels = {
+            recent: 'Less than 4 weeks ago',
+            mid:    '4–7 weeks ago',
+            long:   '8+ weeks ago / new yard',
         };
-        const el = (id) => $(id);
-        const address = [state.street, state.city, state.state, state.zip].filter(Boolean).join(', ');
-        el('review-address').textContent   = address;
-        el('review-lot').textContent       = state.lotLabel || state.lotCategory || '—';
-        el('review-dogs').textContent      = state.dogCount;
-        el('review-frequency').textContent = freqLabels[state.frequency] || state.frequency;
-        el('review-price').textContent     = state.priceFormatted || '—';
+        const acreLabels = { small: 'Under 1 acre', medium: '1–1.5 acres' };
+
+        const isOneTime = state.serviceType === 'one_time';
+
+        $('review-type').textContent = isOneTime
+            ? 'One-Time Cleanup'
+            : (state.annualPrepay ? 'Recurring (Annual Prepay)' : 'Recurring (Monthly)');
+
+        $('review-address').textContent = [state.street, state.city, state.state, state.zip].filter(Boolean).join(', ');
+        $('review-lot').textContent = `${acreLabels[state.lotTier] || state.lotTier}` +
+            (state.lotAcres ? ` (${state.lotAcres} acres)` : '');
+
+        $('review-dogs-row').style.display = isOneTime ? 'none' : 'flex';
+        $('review-frequency-row').style.display = isOneTime ? 'none' : 'flex';
+        $('review-dogs').textContent = state.dogCount;
+        $('review-frequency').textContent = freqLabels[state.frequency] || state.frequency;
+        $('review-time-since').textContent = timeLabels[state.timeSinceCleaned] || state.timeSinceCleaned;
+
+        $('review-price').textContent = fmt(state.totalCents);
+
+        if (!isOneTime && !state.annualPrepay && state.breakdown?.recurring_monthly_cents) {
+            $('review-recurring-row').style.display = 'flex';
+            $('review-recurring').textContent = fmt(state.breakdown.recurring_monthly_cents) + '/mo';
+            $('review-total-label').textContent = 'First payment';
+        } else {
+            $('review-recurring-row').style.display = 'none';
+            $('review-total-label').textContent = isOneTime ? 'Total' : (state.annualPrepay ? 'Annual Total' : 'First payment');
+        }
     }
 
-    // ── Checkout ───────────────────────────────────────────────────────────
+    // ── Checkout ──────────────────────────────────────────────────────────
     async function handleCompleteBooking() {
         const btn     = $('jjpws-complete-booking');
         const errDiv  = $('jjpws-checkout-error');
@@ -277,44 +423,105 @@
         if (spinner) spinner.style.display = 'inline-block';
 
         try {
-            const json = await post('jjpws_create_checkout_session', {
-                street:             state.street,
-                city:               state.city,
-                state:              state.state,
-                zip:                state.zip,
-                lat:                state.lat,
-                lng:                state.lng,
-                lot_size_sqft:      state.lotSqft,
-                lot_size_category:  state.lotCategory,
-                dog_count:          state.dogCount,
-                frequency:          state.frequency,
-                monthly_price_cents: state.priceCents,
-            });
+            const body = {
+                service_type: state.serviceType,
+                street: state.street, city: state.city, state: state.state, zip: state.zip,
+                lat: state.lat, lng: state.lng,
+                lot_size_sqft: state.lotSqft,
+                lot_size_acres: state.lotAcres,
+                acreage_tier: state.lotTier,
+                dog_count: state.dogCount,
+                frequency: state.frequency,
+                time_since_cleaned: state.timeSinceCleaned,
+                annual_prepay: state.annualPrepay ? '1' : '0',
+                distance_miles: state.distanceMiles ?? 0,
+                total_price_cents: state.totalCents,
+            };
+
+            const json = await post('jjpws_create_checkout_session', body);
 
             if (json.success && json.data.checkout_url) {
                 window.location.href = json.data.checkout_url;
             } else {
-                const msg = json.data?.message || 'Something went wrong. Please try again.';
-                errDiv.textContent   = msg;
+                errDiv.textContent = json.data?.message || 'Something went wrong. Please try again.';
                 errDiv.style.display = 'block';
                 btn.disabled = false;
                 if (spinner) spinner.style.display = 'none';
             }
-        } catch {
-            errDiv.textContent   = 'Network error. Please check your connection and try again.';
+        } catch (e) {
+            errDiv.textContent = 'Network error. Please check your connection and try again.';
             errDiv.style.display = 'block';
             btn.disabled = false;
             if (spinner) spinner.style.display = 'none';
         }
     }
 
-    // ── Session storage (form resume) ──────────────────────────────────────
-    const STORAGE_KEY = 'jjpws_form_state';
+    // ── Quote form ────────────────────────────────────────────────────────
+    async function handleQuoteSubmit() {
+        const btn     = $('jjpws-quote-submit');
+        const spinner = btn?.querySelector('.jjpws-btn__spinner');
+        const errDiv  = $('jjpws-quote-error');
+        const success = $('jjpws-quote-success');
+        const actions = $('jjpws-quote-actions');
+
+        errDiv.style.display = 'none';
+        clearErrors();
+
+        const email = $('jjpws-quote-email').value.trim();
+        const message = $('jjpws-quote-message').value.trim();
+
+        let valid = true;
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+            markError('jjpws-quote-email', 'err-quote-email', 'Please enter a valid email.');
+            valid = false;
+        }
+        if (!message) {
+            markError('jjpws-quote-message', 'err-quote-message', 'Please write a short message.');
+            valid = false;
+        }
+        if (!valid) return;
+
+        btn.disabled = true;
+        if (spinner) spinner.style.display = 'inline-block';
+
+        try {
+            const body = {
+                name: $('jjpws-quote-name').value.trim(),
+                email,
+                phone: $('jjpws-quote-phone').value.trim(),
+                message,
+                reason: $('jjpws-quote-reason').value || 'other',
+                street: state.street, city: state.city, state: state.state, zip: state.zip,
+                lot_size_acres: state.lotAcres ?? '',
+                dog_count: state.dogCount,
+                distance_miles: state.distanceMiles ?? '',
+            };
+
+            const json = await post('jjpws_submit_quote', body);
+
+            if (json.success) {
+                success.style.display = 'block';
+                actions.style.display = 'none';
+                qA('#jjpws-quote-form .jjpws-field').forEach(el => el.style.display = 'none');
+            } else {
+                errDiv.textContent = json.data?.message || 'Something went wrong.';
+                errDiv.style.display = 'block';
+                btn.disabled = false;
+                if (spinner) spinner.style.display = 'none';
+            }
+        } catch (e) {
+            errDiv.textContent = 'Network error. Please try again.';
+            errDiv.style.display = 'block';
+            btn.disabled = false;
+            if (spinner) spinner.style.display = 'none';
+        }
+    }
+
+    // ── Form state persistence ────────────────────────────────────────────
+    const STORAGE_KEY = 'jjpws_form_state_v2';
 
     function saveFormState() {
-        try {
-            sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-        } catch { /* quota/private mode */ }
+        try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
     }
 
     function restoreFormState() {
@@ -323,62 +530,61 @@
             if (!raw) return;
             const saved = JSON.parse(raw);
 
-            // Restore address fields
-            if (saved.street) { $('jjpws-street').value = saved.street; state.street = saved.street; }
-            if (saved.city)   { $('jjpws-city').value   = saved.city;   state.city   = saved.city;   }
-            if (saved.state)  { $('jjpws-state').value  = saved.state;  state.state  = saved.state;  }
-            if (saved.zip)    { $('jjpws-zip').value     = saved.zip;    state.zip    = saved.zip;    }
+            Object.assign(state, saved);
 
-            if (saved.lat)   { $('jjpws-lat').value  = saved.lat;  state.lat  = saved.lat;  }
-            if (saved.lng)   { $('jjpws-lng').value   = saved.lng;  state.lng  = saved.lng;  }
-            if (saved.lotSqft)     { $('jjpws-lot-sqft').value     = saved.lotSqft;     state.lotSqft     = saved.lotSqft;     }
-            if (saved.lotCategory) { $('jjpws-lot-category').value = saved.lotCategory; state.lotCategory = saved.lotCategory; }
-            if (saved.lotLabel)    {
-                state.lotLabel = saved.lotLabel;
-                showLotResolved(saved.lotLabel);
-            }
+            // Hydrate inputs
+            $('jjpws-street').value = state.street || '';
+            $('jjpws-city').value   = state.city   || '';
+            $('jjpws-state').value  = state.state  || '';
+            $('jjpws-zip').value    = state.zip    || '';
+            if (state.lat)      $('jjpws-lat').value         = state.lat;
+            if (state.lng)      $('jjpws-lng').value          = state.lng;
+            if (state.lotSqft)  $('jjpws-lot-sqft').value     = state.lotSqft;
+            if (state.lotAcres) $('jjpws-lot-acres').value    = state.lotAcres;
+            if (state.lotTier)  $('jjpws-lot-category').value = state.lotTier;
+            if (state.distanceMiles !== null) $('jjpws-distance-miles').value = state.distanceMiles;
 
-            if (saved.dogCount) {
-                state.dogCount = saved.dogCount;
-                const dc = $('jjpws-dog-count');
-                if (dc) dc.value = saved.dogCount;
-            }
+            $('jjpws-dog-count').value = state.dogCount;
+            qA('input[name="frequency"]').forEach(r => r.checked = (r.value === state.frequency));
+            qA('input[name="service_type"]').forEach(r => r.checked = (r.value === state.serviceType));
+            $('jjpws-time-since').value = state.timeSinceCleaned;
+            $('jjpws-annual-prepay').checked = !!state.annualPrepay;
 
-            if (saved.frequency) {
-                state.frequency = saved.frequency;
-                const radios = qA('input[name="frequency"]');
-                radios.forEach(r => (r.checked = r.value === saved.frequency));
-            }
-
-            if (saved.priceCents) {
-                state.priceCents    = saved.priceCents;
-                state.priceFormatted = saved.priceFormatted;
-                $('jjpws-price-cents').value = saved.priceCents;
-                $('jjpws-price-amount').textContent = saved.priceFormatted || '';
-                const pp = $('jjpws-price-preview');
-                if (pp) pp.style.display = 'block';
-            }
+            if (state.totalCents) $('jjpws-total-cents').value = state.totalCents;
 
             sessionStorage.removeItem(STORAGE_KEY);
+
+            if (state.lotLabel) {
+                $('jjpws-lot-resolved').style.display = 'block';
+                $('jjpws-lot-acres-text').textContent =
+                    state.lotAcres ? `${state.lotAcres} acres — ${state.lotLabel}` : state.lotLabel;
+            }
+
+            applyServiceTypeToggle();
             goToStep(3);
             populateReview();
-        } catch { /* ignore */ }
+        } catch (e) { console.error(e); }
     }
 
-    // ── Stepper buttons ────────────────────────────────────────────────────
+    // ── UI toggles ────────────────────────────────────────────────────────
+    function applyServiceTypeToggle() {
+        const isOneTime = state.serviceType === 'one_time';
+        $('jjpws-recurring-fields').style.display = isOneTime ? 'none' : 'block';
+        $('jjpws-annual-prepay-row').style.display = isOneTime ? 'none' : 'block';
+    }
+
     function initStepper() {
         qS('.jjpws-stepper__btn--minus')?.addEventListener('click', () => {
             const inp = $('jjpws-dog-count');
-            const v   = Math.max(1, parseInt(inp.value) - 1);
-            inp.value     = v;
+            const v = Math.max(1, parseInt(inp.value) - 1);
+            inp.value = v;
             state.dogCount = v;
             schedulePriceUpdate();
         });
-
         qS('.jjpws-stepper__btn--plus')?.addEventListener('click', () => {
             const inp = $('jjpws-dog-count');
-            const v   = Math.min(10, parseInt(inp.value) + 1);
-            inp.value     = v;
+            const v = Math.min(10, parseInt(inp.value) + 1);
+            inp.value = v;
             state.dogCount = v;
             schedulePriceUpdate();
         });
@@ -386,37 +592,38 @@
 
     // ── Init ───────────────────────────────────────────────────────────────
     function init() {
-        // Step 1 next
+        // Step 1
         $('jjpws-step1-next')?.addEventListener('click', async () => {
             if (!validateStep1()) return;
             collectStep1();
-
-            // If lot not yet resolved (user filled manually without autocomplete), trigger lookup
-            if (!state.lotCategory) {
+            if (!state.lotTier) {
                 await lookupLotSize();
-                if (!state.lotCategory) return; // still not resolved — manual required
+                if (!state.lotTier) return;
             }
-
             goToStep(2);
             fetchPrice();
         });
 
-        // Step 2 back / next
         $('jjpws-step2-back')?.addEventListener('click', () => goToStep(1));
-
         $('jjpws-step2-next')?.addEventListener('click', () => {
-            if (!validateStep2()) return;
+            if (!state.totalCents) return;
             populateReview();
             goToStep(3);
         });
-
-        // Step 3 back
         $('jjpws-step3-back')?.addEventListener('click', () => goToStep(2));
 
-        // Complete booking
         $('jjpws-complete-booking')?.addEventListener('click', handleCompleteBooking);
 
-        // Frequency radios
+        // Service type
+        qA('input[name="service_type"]').forEach(r => {
+            r.addEventListener('change', () => {
+                state.serviceType = r.value;
+                applyServiceTypeToggle();
+                schedulePriceUpdate();
+            });
+        });
+
+        // Frequency
         qA('input[name="frequency"]').forEach(r => {
             r.addEventListener('change', () => {
                 state.frequency = r.value;
@@ -424,33 +631,51 @@
             });
         });
 
-        // Manual lot size select
+        // Time since cleaned
+        $('jjpws-time-since')?.addEventListener('change', (e) => {
+            state.timeSinceCleaned = e.target.value;
+            schedulePriceUpdate();
+        });
+
+        // Annual prepay
+        $('jjpws-annual-prepay')?.addEventListener('change', (e) => {
+            state.annualPrepay = e.target.checked;
+            schedulePriceUpdate();
+        });
+
+        // Manual lot select
         $('jjpws-lot-manual-select')?.addEventListener('change', (e) => {
             const v = e.target.value;
-            state.lotCategory = v;
-            state.lotLabel    = jjpwsData.lotCategories[v] || v;
-            setHiddenLot(v, null);
+            state.lotTier = v;
+            $('jjpws-lot-category').value = v;
+            if (v === 'large') {
+                showQuotePrompt('large_lot', 'Lots over 1.5 acres need a custom quote.');
+            } else {
+                hideQuotePrompt();
+            }
         });
 
-        // Address fields — trigger lot lookup on blur if no Google Autocomplete
-        if (!jjpwsData.hasGoogle) {
-            ['jjpws-zip'].forEach(id => {
-                $(id)?.addEventListener('change', lookupLotSize);
-            });
-        }
-
-        // Google Autocomplete event
-        document.addEventListener('jjpws:addressSelected', () => {
-            lookupLotSize();
+        // Address change → re-lookup
+        ['jjpws-zip'].forEach(id => {
+            $(id)?.addEventListener('change', lookupLotSize);
         });
+        document.addEventListener('jjpws:addressSelected', lookupLotSize);
 
-        // Stepper
+        // Quote form
+        $('jjpws-show-quote-form')?.addEventListener('click', () => {
+            const reason = $('jjpws-quote-prompt')?.dataset.reason || 'other';
+            showQuoteForm(reason, { email: jjpwsData.userEmail });
+        });
+        $('jjpws-show-quote-form-2')?.addEventListener('click', () => {
+            showQuoteForm('too_many_dogs', { email: jjpwsData.userEmail });
+        });
+        $('jjpws-quote-cancel')?.addEventListener('click', hideQuoteForm);
+        $('jjpws-quote-submit')?.addEventListener('click', handleQuoteSubmit);
+
         initStepper();
 
-        // Resume flow after auth redirect
-        if (jjpwsData.resumeFlow) {
-            restoreFormState();
-        }
+        // Resume after auth
+        if (jjpwsData.resumeFlow) restoreFormState();
     }
 
     if (document.readyState === 'loading') {

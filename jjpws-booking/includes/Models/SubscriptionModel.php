@@ -14,53 +14,61 @@ class SubscriptionModel {
     public function create( array $data ): int|false {
         global $wpdb;
 
-        $result = $wpdb->insert(
-            $this->table,
-            [
-                'user_id'             => absint( $data['user_id'] ),
-                'stripe_customer_id'  => sanitize_text_field( $data['stripe_customer_id'] ),
-                'stripe_sub_id'       => sanitize_text_field( $data['stripe_sub_id'] ),
-                'stripe_price_id'     => sanitize_text_field( $data['stripe_price_id'] ),
-                'street_address'      => sanitize_text_field( $data['street_address'] ),
-                'city'                => sanitize_text_field( $data['city'] ),
-                'state'               => sanitize_text_field( $data['state'] ),
-                'zip_code'            => sanitize_text_field( $data['zip_code'] ),
-                'lat'                 => isset( $data['lat'] ) ? floatval( $data['lat'] ) : null,
-                'lng'                 => isset( $data['lng'] ) ? floatval( $data['lng'] ) : null,
-                'lot_size_sqft'       => isset( $data['lot_size_sqft'] ) ? absint( $data['lot_size_sqft'] ) : null,
-                'lot_size_category'   => sanitize_text_field( $data['lot_size_category'] ),
-                'dog_count'           => absint( $data['dog_count'] ),
-                'frequency'           => sanitize_text_field( $data['frequency'] ),
-                'monthly_price_cents' => absint( $data['monthly_price_cents'] ),
-                'status'              => 'active',
-                'stripe_status'       => sanitize_text_field( $data['stripe_status'] ?? 'active' ),
-                'current_period_end'  => $data['current_period_end'] ?? null,
-            ],
-            [ '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%f', '%f', '%d', '%s', '%d', '%s', '%d', '%s', '%s', '%s', '%s' ]
-        );
+        $row = [
+            'user_id'                  => absint( $data['user_id'] ),
+            'service_type'             => sanitize_text_field( $data['service_type'] ?? 'recurring' ),
+            'stripe_customer_id'       => sanitize_text_field( $data['stripe_customer_id'] ?? '' ),
+            'stripe_sub_id'            => sanitize_text_field( $data['stripe_sub_id'] ?? '' ),
+            'stripe_payment_intent_id' => sanitize_text_field( $data['stripe_payment_intent_id'] ?? '' ),
+            'stripe_price_id'          => sanitize_text_field( $data['stripe_price_id'] ?? '' ),
+            'street_address'           => sanitize_text_field( $data['street_address'] ),
+            'city'                     => sanitize_text_field( $data['city'] ),
+            'state'                    => sanitize_text_field( $data['state'] ),
+            'zip_code'                 => sanitize_text_field( $data['zip_code'] ),
+            'lat'                      => isset( $data['lat'] ) ? floatval( $data['lat'] ) : null,
+            'lng'                      => isset( $data['lng'] ) ? floatval( $data['lng'] ) : null,
+            'distance_miles'           => isset( $data['distance_miles'] ) ? floatval( $data['distance_miles'] ) : null,
+            'lot_size_sqft'            => isset( $data['lot_size_sqft'] ) ? absint( $data['lot_size_sqft'] ) : null,
+            'lot_size_acres'           => isset( $data['lot_size_acres'] ) ? floatval( $data['lot_size_acres'] ) : null,
+            'acreage_tier'             => sanitize_text_field( $data['acreage_tier'] ?? 'small' ),
+            'dog_count'                => absint( $data['dog_count'] ),
+            'dog_tier'                 => sanitize_text_field( $data['dog_tier'] ?? '' ),
+            'frequency'                => sanitize_text_field( $data['frequency'] ?? '' ),
+            'time_since_cleaned'       => sanitize_text_field( $data['time_since_cleaned'] ?? '' ),
+            'annual_prepay'            => ! empty( $data['annual_prepay'] ) ? 1 : 0,
+            'base_price_cents'         => absint( $data['base_price_cents'] ?? 0 ),
+            'acreage_premium_cents'    => absint( $data['acreage_premium_cents'] ?? 0 ),
+            'distance_fee_cents'       => absint( $data['distance_fee_cents'] ?? 0 ),
+            'neglect_surcharge_cents'  => absint( $data['neglect_surcharge_cents'] ?? 0 ),
+            'annual_discount_cents'    => absint( $data['annual_discount_cents'] ?? 0 ),
+            'recurring_monthly_cents'  => absint( $data['recurring_monthly_cents'] ?? 0 ),
+            'total_price_cents'        => absint( $data['total_price_cents'] ),
+            'status'                   => sanitize_text_field( $data['status'] ?? 'active' ),
+            'stripe_status'            => sanitize_text_field( $data['stripe_status'] ?? '' ),
+            'current_period_end'       => $data['current_period_end'] ?? null,
+        ];
 
+        $result = $wpdb->insert( $this->table, $row );
         return $result ? $wpdb->insert_id : false;
     }
 
     public function find( int $id ): ?object {
         global $wpdb;
-
-        return $wpdb->get_row(
-            $wpdb->prepare( "SELECT * FROM {$this->table} WHERE id = %d", $id )
-        );
+        return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->table} WHERE id = %d", $id ) );
     }
 
     public function find_by_stripe_sub( string $stripe_sub_id ): ?object {
         global $wpdb;
+        return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->table} WHERE stripe_sub_id = %s", $stripe_sub_id ) );
+    }
 
-        return $wpdb->get_row(
-            $wpdb->prepare( "SELECT * FROM {$this->table} WHERE stripe_sub_id = %s", $stripe_sub_id )
-        );
+    public function find_by_payment_intent( string $intent_id ): ?object {
+        global $wpdb;
+        return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$this->table} WHERE stripe_payment_intent_id = %s", $intent_id ) );
     }
 
     public function get_by_user( int $user_id ): array {
         global $wpdb;
-
         return $wpdb->get_results(
             $wpdb->prepare( "SELECT * FROM {$this->table} WHERE user_id = %d ORDER BY created_at DESC", $user_id )
         ) ?: [];
@@ -73,12 +81,17 @@ class SubscriptionModel {
         $params = [];
 
         if ( ! empty( $args['status'] ) ) {
-            $where   .= ' AND status = %s';
+            $where   .= ' AND s.status = %s';
             $params[] = $args['status'];
         }
 
+        if ( ! empty( $args['service_type'] ) ) {
+            $where   .= ' AND s.service_type = %s';
+            $params[] = $args['service_type'];
+        }
+
         if ( ! empty( $args['search'] ) ) {
-            $where   .= ' AND (street_address LIKE %s OR city LIKE %s)';
+            $where   .= ' AND (s.street_address LIKE %s OR s.city LIKE %s)';
             $like     = '%' . $wpdb->esc_like( $args['search'] ) . '%';
             $params[] = $like;
             $params[] = $like;
@@ -118,15 +131,13 @@ class SubscriptionModel {
         $data   = array_merge( [ 'status' => $status ], $extra );
         $format = array_fill( 0, count( $data ), '%s' );
 
-        $result = $wpdb->update(
+        return false !== $wpdb->update(
             $this->table,
             $data,
             [ 'stripe_sub_id' => $stripe_sub_id ],
             $format,
             [ '%s' ]
         );
-
-        return $result !== false;
     }
 
     public function update_period_end( string $stripe_sub_id, string $period_end ): bool {

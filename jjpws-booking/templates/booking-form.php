@@ -18,15 +18,15 @@
     <div class="jjpws-steps-indicator" role="progressbar" aria-label="Booking steps">
         <div class="jjpws-step jjpws-step--active" data-step="1">
             <span class="jjpws-step__number">1</span>
-            <span class="jjpws-step__label"><?php esc_html_e( 'Your Address', 'jjpws-booking' ); ?></span>
+            <span class="jjpws-step__label"><?php esc_html_e( 'Address', 'jjpws-booking' ); ?></span>
         </div>
         <div class="jjpws-step" data-step="2">
             <span class="jjpws-step__number">2</span>
-            <span class="jjpws-step__label"><?php esc_html_e( 'Service Details', 'jjpws-booking' ); ?></span>
+            <span class="jjpws-step__label"><?php esc_html_e( 'Service', 'jjpws-booking' ); ?></span>
         </div>
         <div class="jjpws-step" data-step="3">
             <span class="jjpws-step__number">3</span>
-            <span class="jjpws-step__label"><?php esc_html_e( 'Review & Book', 'jjpws-booking' ); ?></span>
+            <span class="jjpws-step__label"><?php esc_html_e( 'Review', 'jjpws-booking' ); ?></span>
         </div>
     </div>
 
@@ -38,8 +38,7 @@
 
             <div class="jjpws-field">
                 <label for="jjpws-street"><?php esc_html_e( 'Street Address', 'jjpws-booking' ); ?> <span class="jjpws-req">*</span></label>
-                <input type="text" id="jjpws-street" name="street" autocomplete="address-line1"
-                       placeholder="123 Main St" required minlength="5" />
+                <input type="text" id="jjpws-street" name="street" autocomplete="address-line1" placeholder="123 Main St" required minlength="5" />
                 <span class="jjpws-field-error" id="err-street"></span>
             </div>
 
@@ -52,49 +51,60 @@
                 <div class="jjpws-field jjpws-field--sm">
                     <label for="jjpws-state"><?php esc_html_e( 'State', 'jjpws-booking' ); ?> <span class="jjpws-req">*</span></label>
                     <input type="text" id="jjpws-state" name="state" autocomplete="address-level1" maxlength="2" required />
-                    <span class="jjpws-field-error" id="err-state"></span>
                 </div>
                 <div class="jjpws-field jjpws-field--sm">
-                    <label for="jjpws-zip"><?php esc_html_e( 'ZIP Code', 'jjpws-booking' ); ?> <span class="jjpws-req">*</span></label>
+                    <label for="jjpws-zip"><?php esc_html_e( 'ZIP', 'jjpws-booking' ); ?> <span class="jjpws-req">*</span></label>
                     <input type="text" id="jjpws-zip" name="zip" autocomplete="postal-code" pattern="\d{5}" maxlength="5" required />
-                    <span class="jjpws-field-error" id="err-zip"></span>
                 </div>
             </div>
 
-            <!-- Hidden geocode fields -->
             <input type="hidden" id="jjpws-lat" name="lat" />
             <input type="hidden" id="jjpws-lng" name="lng" />
             <input type="hidden" id="jjpws-lot-sqft" name="lot_size_sqft" />
-            <input type="hidden" id="jjpws-lot-category" name="lot_size_category" />
-            <input type="hidden" id="jjpws-lot-label" name="lot_size_label" />
+            <input type="hidden" id="jjpws-lot-acres" name="lot_size_acres" />
+            <input type="hidden" id="jjpws-lot-category" name="acreage_tier" />
+            <input type="hidden" id="jjpws-distance-miles" name="distance_miles" />
 
-            <!-- Lot size resolved display -->
-            <div id="jjpws-lot-resolved" class="jjpws-lot-resolved" style="display:none;">
-                <p><?php esc_html_e( 'Detected lot size:', 'jjpws-booking' ); ?> <strong id="jjpws-lot-label-text"></strong></p>
+            <div id="jjpws-lot-loading" class="jjpws-lot-loading" style="display:none;">
+                <span class="jjpws-spinner"></span>
+                <?php esc_html_e( 'Looking up your address…', 'jjpws-booking' ); ?>
             </div>
 
-            <!-- Manual lot size fallback (shown only when API fails) -->
+            <!-- Auto-resolved lot info -->
+            <div id="jjpws-lot-resolved" class="jjpws-lot-resolved" style="display:none;">
+                <p>
+                    <strong><?php esc_html_e( 'Lot Size:', 'jjpws-booking' ); ?></strong>
+                    <span id="jjpws-lot-acres-text"></span>
+                </p>
+                <p id="jjpws-distance-text" style="display:none;">
+                    <strong><?php esc_html_e( 'Distance:', 'jjpws-booking' ); ?></strong>
+                    <span id="jjpws-distance-value"></span>
+                    <span id="jjpws-distance-fee-note" style="display:none; color:#666; font-size:13px;"></span>
+                </p>
+            </div>
+
+            <!-- Manual lot size fallback -->
             <div id="jjpws-lot-manual" class="jjpws-lot-manual" style="display:none;">
                 <label for="jjpws-lot-manual-select">
                     <?php esc_html_e( 'Select your approximate lot size', 'jjpws-booking' ); ?>
                     <span class="jjpws-req">*</span>
-                    <span class="jjpws-tooltip" title="<?php esc_attr_e( 'Most residential lots are Small or Medium. When in doubt, choose the size closest to your property.', 'jjpws-booking' ); ?>">?</span>
                 </label>
                 <select id="jjpws-lot-manual-select">
                     <option value=""><?php esc_html_e( '— Select lot size —', 'jjpws-booking' ); ?></option>
-                    <option value="xs"><?php esc_html_e( 'Under 3,000 sq ft', 'jjpws-booking' ); ?></option>
-                    <option value="sm"><?php esc_html_e( '3,000 – 6,000 sq ft', 'jjpws-booking' ); ?></option>
-                    <option value="md"><?php esc_html_e( '6,000 – 10,000 sq ft', 'jjpws-booking' ); ?></option>
-                    <option value="lg"><?php esc_html_e( '10,000 – 18,000 sq ft', 'jjpws-booking' ); ?></option>
-                    <option value="xl"><?php esc_html_e( '18,000+ sq ft', 'jjpws-booking' ); ?></option>
+                    <option value="small"><?php esc_html_e( 'Under 1 acre', 'jjpws-booking' ); ?></option>
+                    <option value="medium"><?php esc_html_e( '1 – 1.5 acres', 'jjpws-booking' ); ?></option>
+                    <option value="large"><?php esc_html_e( 'Over 1.5 acres', 'jjpws-booking' ); ?></option>
                 </select>
                 <span class="jjpws-field-error" id="err-lot-manual"></span>
             </div>
 
-            <!-- Lookup status -->
-            <div id="jjpws-lot-loading" class="jjpws-lot-loading" style="display:none;">
-                <span class="jjpws-spinner"></span>
-                <?php esc_html_e( 'Looking up your lot size…', 'jjpws-booking' ); ?>
+            <!-- Out of range / quote needed -->
+            <div id="jjpws-quote-prompt" class="jjpws-quote-prompt" style="display:none;">
+                <h4 id="jjpws-quote-prompt-title"><?php esc_html_e( 'This service requires a custom quote', 'jjpws-booking' ); ?></h4>
+                <p id="jjpws-quote-prompt-msg"></p>
+                <button type="button" class="jjpws-btn jjpws-btn--primary" id="jjpws-show-quote-form">
+                    <?php esc_html_e( 'Request a Quote', 'jjpws-booking' ); ?>
+                </button>
             </div>
 
             <div class="jjpws-step-nav">
@@ -106,111 +116,213 @@
 
         <!-- ── Step 2: Service Details ─────────────────────────────────── -->
         <div class="jjpws-form-step" data-step="2">
-            <h3><?php esc_html_e( 'Tell us about your dogs', 'jjpws-booking' ); ?></h3>
+            <h3><?php esc_html_e( 'Service Details', 'jjpws-booking' ); ?></h3>
 
             <div class="jjpws-field">
-                <label for="jjpws-dog-count"><?php esc_html_e( 'Number of Dogs', 'jjpws-booking' ); ?> <span class="jjpws-req">*</span></label>
-                <div class="jjpws-stepper">
-                    <button type="button" class="jjpws-stepper__btn jjpws-stepper__btn--minus" aria-label="Decrease">−</button>
-                    <input type="number" id="jjpws-dog-count" name="dog_count" value="1" min="1" max="10" readonly />
-                    <button type="button" class="jjpws-stepper__btn jjpws-stepper__btn--plus" aria-label="Increase">+</button>
-                </div>
-                <span class="jjpws-field-error" id="err-dogs"></span>
-            </div>
-
-            <div class="jjpws-field">
-                <label><?php esc_html_e( 'Service Frequency', 'jjpws-booking' ); ?> <span class="jjpws-req">*</span></label>
+                <label><?php esc_html_e( 'Service Type', 'jjpws-booking' ); ?> <span class="jjpws-req">*</span></label>
                 <div class="jjpws-radio-group" role="radiogroup">
                     <label class="jjpws-radio-card">
-                        <input type="radio" name="frequency" value="twice_weekly" />
+                        <input type="radio" name="service_type" value="recurring" checked />
                         <span class="jjpws-radio-card__label">
-                            <strong><?php esc_html_e( 'Twice a Week', 'jjpws-booking' ); ?></strong>
-                            <small><?php esc_html_e( 'Cleanest yard, most visits', 'jjpws-booking' ); ?></small>
-                        </span>
-                    </label>
-                    <label class="jjpws-radio-card jjpws-radio-card--popular">
-                        <span class="jjpws-badge"><?php esc_html_e( 'Most Popular', 'jjpws-booking' ); ?></span>
-                        <input type="radio" name="frequency" value="weekly" checked />
-                        <span class="jjpws-radio-card__label">
-                            <strong><?php esc_html_e( 'Weekly', 'jjpws-booking' ); ?></strong>
-                            <small><?php esc_html_e( 'Perfect balance of clean and value', 'jjpws-booking' ); ?></small>
+                            <strong><?php esc_html_e( 'Recurring Service', 'jjpws-booking' ); ?></strong>
+                            <small><?php esc_html_e( 'Regular ongoing visits — billed monthly', 'jjpws-booking' ); ?></small>
                         </span>
                     </label>
                     <label class="jjpws-radio-card">
-                        <input type="radio" name="frequency" value="biweekly" />
+                        <input type="radio" name="service_type" value="one_time" />
                         <span class="jjpws-radio-card__label">
-                            <strong><?php esc_html_e( 'Bi-Weekly', 'jjpws-booking' ); ?></strong>
-                            <small><?php esc_html_e( 'Every two weeks, budget-friendly', 'jjpws-booking' ); ?></small>
+                            <strong><?php esc_html_e( 'One-Time Cleanup', 'jjpws-booking' ); ?></strong>
+                            <small><?php esc_html_e( 'Single visit — no recurring charges', 'jjpws-booking' ); ?></small>
                         </span>
                     </label>
                 </div>
-                <span class="jjpws-field-error" id="err-frequency"></span>
             </div>
 
-            <div id="jjpws-price-preview" class="jjpws-price-preview" style="display:none;">
-                <p class="jjpws-price-preview__label"><?php esc_html_e( 'Estimated Monthly Cost:', 'jjpws-booking' ); ?></p>
-                <p class="jjpws-price-preview__amount" id="jjpws-price-amount">—</p>
-                <input type="hidden" id="jjpws-price-cents" name="monthly_price_cents" />
+            <div id="jjpws-recurring-fields">
+                <div class="jjpws-field">
+                    <label for="jjpws-dog-count"><?php esc_html_e( 'Number of Dogs', 'jjpws-booking' ); ?> <span class="jjpws-req">*</span></label>
+                    <div class="jjpws-stepper">
+                        <button type="button" class="jjpws-stepper__btn jjpws-stepper__btn--minus" aria-label="Decrease">−</button>
+                        <input type="number" id="jjpws-dog-count" name="dog_count" value="1" min="1" max="10" readonly />
+                        <button type="button" class="jjpws-stepper__btn jjpws-stepper__btn--plus" aria-label="Increase">+</button>
+                    </div>
+                    <span class="jjpws-field-error" id="err-dogs"></span>
+                </div>
+
+                <div class="jjpws-field">
+                    <label><?php esc_html_e( 'How often?', 'jjpws-booking' ); ?> <span class="jjpws-req">*</span></label>
+                    <div class="jjpws-radio-group" role="radiogroup">
+                        <label class="jjpws-radio-card">
+                            <input type="radio" name="frequency" value="twice_weekly" />
+                            <span class="jjpws-radio-card__label">
+                                <strong><?php esc_html_e( 'Twice a Week', 'jjpws-booking' ); ?></strong>
+                                <small><?php esc_html_e( '8 visits per month', 'jjpws-booking' ); ?></small>
+                            </span>
+                        </label>
+                        <label class="jjpws-radio-card jjpws-radio-card--popular">
+                            <span class="jjpws-badge"><?php esc_html_e( 'Most Popular', 'jjpws-booking' ); ?></span>
+                            <input type="radio" name="frequency" value="weekly" checked />
+                            <span class="jjpws-radio-card__label">
+                                <strong><?php esc_html_e( 'Weekly', 'jjpws-booking' ); ?></strong>
+                                <small><?php esc_html_e( '4 visits per month', 'jjpws-booking' ); ?></small>
+                            </span>
+                        </label>
+                        <label class="jjpws-radio-card">
+                            <input type="radio" name="frequency" value="biweekly" />
+                            <span class="jjpws-radio-card__label">
+                                <strong><?php esc_html_e( 'Bi-Weekly', 'jjpws-booking' ); ?></strong>
+                                <small><?php esc_html_e( '2 visits per month', 'jjpws-booking' ); ?></small>
+                            </span>
+                        </label>
+                    </div>
+                </div>
             </div>
+
+            <div class="jjpws-field">
+                <label for="jjpws-time-since"><?php esc_html_e( 'How long since the yard was last cleaned?', 'jjpws-booking' ); ?></label>
+                <select id="jjpws-time-since" name="time_since_cleaned">
+                    <option value="recent"><?php esc_html_e( 'Less than 4 weeks ago', 'jjpws-booking' ); ?></option>
+                    <option value="mid"><?php esc_html_e( '4–7 weeks ago', 'jjpws-booking' ); ?></option>
+                    <option value="long"><?php esc_html_e( '8+ weeks ago / new yard', 'jjpws-booking' ); ?></option>
+                </select>
+                <small style="color:#666;display:block;margin-top:4px;">
+                    <?php esc_html_e( 'A surcharge may apply for yards needing extra catch-up cleaning.', 'jjpws-booking' ); ?>
+                </small>
+            </div>
+
+            <div class="jjpws-field" id="jjpws-annual-prepay-row">
+                <label class="jjpws-checkbox-row">
+                    <input type="checkbox" id="jjpws-annual-prepay" name="annual_prepay" value="1" />
+                    <span><strong><?php esc_html_e( 'Save 10% — Pay annually', 'jjpws-booking' ); ?></strong>
+                          <small style="display:block;color:#666;">
+                              <?php esc_html_e( 'Pay for a full year upfront and save.', 'jjpws-booking' ); ?>
+                          </small></span>
+                </label>
+            </div>
+
+            <input type="hidden" id="jjpws-total-cents" name="total_price_cents" />
 
             <div id="jjpws-price-loading" class="jjpws-lot-loading" style="display:none;">
                 <span class="jjpws-spinner"></span>
                 <?php esc_html_e( 'Calculating price…', 'jjpws-booking' ); ?>
             </div>
 
-            <div class="jjpws-step-nav">
-                <button type="button" class="jjpws-btn jjpws-btn--secondary" id="jjpws-step2-back">
-                    ← <?php esc_html_e( 'Back', 'jjpws-booking' ); ?>
+            <div id="jjpws-price-preview" class="jjpws-price-preview" style="display:none;">
+                <p class="jjpws-price-preview__label" id="jjpws-price-label"><?php esc_html_e( 'Estimated Monthly Cost:', 'jjpws-booking' ); ?></p>
+                <p class="jjpws-price-preview__amount" id="jjpws-price-amount">—</p>
+                <div class="jjpws-price-breakdown" id="jjpws-price-breakdown"></div>
+            </div>
+
+            <!-- 5+ dogs / out-of-cap inline quote prompt -->
+            <div id="jjpws-step2-quote-prompt" class="jjpws-quote-prompt" style="display:none;">
+                <h4><?php esc_html_e( 'Custom quote needed', 'jjpws-booking' ); ?></h4>
+                <p id="jjpws-step2-quote-msg"></p>
+                <button type="button" class="jjpws-btn jjpws-btn--primary" id="jjpws-show-quote-form-2">
+                    <?php esc_html_e( 'Request a Quote', 'jjpws-booking' ); ?>
                 </button>
+            </div>
+
+            <div class="jjpws-step-nav">
+                <button type="button" class="jjpws-btn jjpws-btn--secondary" id="jjpws-step2-back">← <?php esc_html_e( 'Back', 'jjpws-booking' ); ?></button>
                 <button type="button" class="jjpws-btn jjpws-btn--primary" id="jjpws-step2-next">
                     <?php esc_html_e( 'Continue to Review', 'jjpws-booking' ); ?>
                 </button>
             </div>
         </div>
 
-        <!-- ── Step 3: Review & Confirm ───────────────────────────────── -->
+        <!-- ── Step 3: Review ─────────────────────────────────────────── -->
         <div class="jjpws-form-step" data-step="3">
             <h3><?php esc_html_e( 'Review Your Booking', 'jjpws-booking' ); ?></h3>
 
             <div class="jjpws-review-card">
                 <div class="jjpws-review-row">
-                    <span class="jjpws-review-row__label"><?php esc_html_e( 'Service Address', 'jjpws-booking' ); ?></span>
+                    <span class="jjpws-review-row__label"><?php esc_html_e( 'Service Type', 'jjpws-booking' ); ?></span>
+                    <span class="jjpws-review-row__value" id="review-type">—</span>
+                </div>
+                <div class="jjpws-review-row">
+                    <span class="jjpws-review-row__label"><?php esc_html_e( 'Address', 'jjpws-booking' ); ?></span>
                     <span class="jjpws-review-row__value" id="review-address">—</span>
                 </div>
                 <div class="jjpws-review-row">
                     <span class="jjpws-review-row__label"><?php esc_html_e( 'Lot Size', 'jjpws-booking' ); ?></span>
                     <span class="jjpws-review-row__value" id="review-lot">—</span>
                 </div>
-                <div class="jjpws-review-row">
-                    <span class="jjpws-review-row__label"><?php esc_html_e( 'Number of Dogs', 'jjpws-booking' ); ?></span>
+                <div class="jjpws-review-row" id="review-dogs-row">
+                    <span class="jjpws-review-row__label"><?php esc_html_e( 'Dogs', 'jjpws-booking' ); ?></span>
                     <span class="jjpws-review-row__value" id="review-dogs">—</span>
                 </div>
-                <div class="jjpws-review-row">
-                    <span class="jjpws-review-row__label"><?php esc_html_e( 'Service Frequency', 'jjpws-booking' ); ?></span>
+                <div class="jjpws-review-row" id="review-frequency-row">
+                    <span class="jjpws-review-row__label"><?php esc_html_e( 'Frequency', 'jjpws-booking' ); ?></span>
                     <span class="jjpws-review-row__value" id="review-frequency">—</span>
                 </div>
+                <div class="jjpws-review-row">
+                    <span class="jjpws-review-row__label"><?php esc_html_e( 'Time Since Last Cleaned', 'jjpws-booking' ); ?></span>
+                    <span class="jjpws-review-row__value" id="review-time-since">—</span>
+                </div>
                 <div class="jjpws-review-row jjpws-review-row--total">
-                    <span class="jjpws-review-row__label"><?php esc_html_e( 'Monthly Total', 'jjpws-booking' ); ?></span>
+                    <span class="jjpws-review-row__label" id="review-total-label"><?php esc_html_e( 'Due Today', 'jjpws-booking' ); ?></span>
                     <span class="jjpws-review-row__value" id="review-price">—</span>
+                </div>
+                <div class="jjpws-review-row" id="review-recurring-row" style="display:none;">
+                    <span class="jjpws-review-row__label"><?php esc_html_e( 'Then per month', 'jjpws-booking' ); ?></span>
+                    <span class="jjpws-review-row__value" id="review-recurring">—</span>
                 </div>
             </div>
 
             <p class="jjpws-review-note">
-                <?php esc_html_e( 'You will be redirected to our secure checkout to enter your payment details. No charges are made until you confirm.', 'jjpws-booking' ); ?>
+                <?php esc_html_e( 'You\'ll be redirected to our secure Stripe checkout. No charges happen until you confirm there.', 'jjpws-booking' ); ?>
             </p>
 
             <div id="jjpws-checkout-error" class="jjpws-error-msg" style="display:none;"></div>
 
             <div class="jjpws-step-nav">
-                <button type="button" class="jjpws-btn jjpws-btn--secondary" id="jjpws-step3-back">
-                    ← <?php esc_html_e( 'Back', 'jjpws-booking' ); ?>
-                </button>
+                <button type="button" class="jjpws-btn jjpws-btn--secondary" id="jjpws-step3-back">← <?php esc_html_e( 'Back', 'jjpws-booking' ); ?></button>
                 <button type="button" class="jjpws-btn jjpws-btn--primary jjpws-btn--cta" id="jjpws-complete-booking">
                     <?php esc_html_e( 'Complete Booking', 'jjpws-booking' ); ?>
                     <span class="jjpws-btn__spinner" style="display:none;"></span>
                 </button>
             </div>
         </div>
-
     </form>
+
+    <!-- Quote Request Modal/Section -->
+    <div id="jjpws-quote-form" class="jjpws-quote-form" style="display:none;">
+        <h3><?php esc_html_e( 'Request a Custom Quote', 'jjpws-booking' ); ?></h3>
+        <p><?php esc_html_e( 'Drop your details and a short message — we\'ll get back to you within one business day.', 'jjpws-booking' ); ?></p>
+
+        <input type="hidden" id="jjpws-quote-reason" name="reason" />
+
+        <div class="jjpws-field">
+            <label for="jjpws-quote-name"><?php esc_html_e( 'Your Name', 'jjpws-booking' ); ?></label>
+            <input type="text" id="jjpws-quote-name" name="name" />
+        </div>
+        <div class="jjpws-field">
+            <label for="jjpws-quote-email"><?php esc_html_e( 'Email', 'jjpws-booking' ); ?> <span class="jjpws-req">*</span></label>
+            <input type="email" id="jjpws-quote-email" name="email" required />
+            <span class="jjpws-field-error" id="err-quote-email"></span>
+        </div>
+        <div class="jjpws-field">
+            <label for="jjpws-quote-phone"><?php esc_html_e( 'Phone', 'jjpws-booking' ); ?></label>
+            <input type="tel" id="jjpws-quote-phone" name="phone" />
+        </div>
+        <div class="jjpws-field">
+            <label for="jjpws-quote-message"><?php esc_html_e( 'Message', 'jjpws-booking' ); ?> <span class="jjpws-req">*</span></label>
+            <textarea id="jjpws-quote-message" name="message" rows="4" required></textarea>
+            <span class="jjpws-field-error" id="err-quote-message"></span>
+        </div>
+
+        <div id="jjpws-quote-error" class="jjpws-error-msg" style="display:none;"></div>
+        <div id="jjpws-quote-success" class="jjpws-success-banner" style="display:none;">
+            <h2><?php esc_html_e( 'Thanks!', 'jjpws-booking' ); ?></h2>
+            <p><?php esc_html_e( 'We received your request and will follow up within one business day.', 'jjpws-booking' ); ?></p>
+        </div>
+
+        <div class="jjpws-step-nav" id="jjpws-quote-actions">
+            <button type="button" class="jjpws-btn jjpws-btn--secondary" id="jjpws-quote-cancel">← <?php esc_html_e( 'Back', 'jjpws-booking' ); ?></button>
+            <button type="button" class="jjpws-btn jjpws-btn--primary" id="jjpws-quote-submit">
+                <?php esc_html_e( 'Send Request', 'jjpws-booking' ); ?>
+                <span class="jjpws-btn__spinner" style="display:none;"></span>
+            </button>
+        </div>
+    </div>
 </div>

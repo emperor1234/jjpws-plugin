@@ -5,10 +5,13 @@ namespace JJPWS\Services;
 class LotSizeService {
 
     /**
-     * Resolve lot size from address components.
+     * Resolve lot size from address.
      *
-     * Returns array: [ sqft, category, label, source, lat, lng ]
-     * Returns null if resolution is impossible (caller shows manual fallback).
+     * Returns array: [ sqft, acres, tier, label, source, lat, lng ]
+     * or null if even geocoding failed.
+     *
+     * `source` will be 'manual_required' when geocoding worked but parcel
+     * lookup didn't — the form falls back to a manual selector silently.
      */
     public function resolve_from_address( string $street, string $city, string $state, string $zip ): ?array {
         $coords = $this->geocode( $street, $city, $state, $zip );
@@ -20,27 +23,31 @@ class LotSizeService {
         [ 'lat' => $lat, 'lng' => $lng ] = $coords;
 
         $sqft = $this->regrid_lookup( $lat, $lng );
-        $source = 'regrid';
-
-        if ( $sqft === null ) {
-            $sqft   = null;
-            $source = 'manual_required';
-        }
 
         if ( $sqft !== null ) {
-            $category = LotSizeClassifier::classify( $sqft );
-            $label    = LotSizeClassifier::label( $category );
+            $acres = LotSizeClassifier::sqft_to_acres( $sqft );
+            $tier  = LotSizeClassifier::classify_by_acres( $acres );
+            $label = LotSizeClassifier::label( $tier );
 
-            return compact( 'sqft', 'category', 'label', 'source', 'lat', 'lng' );
+            return [
+                'sqft'   => $sqft,
+                'acres'  => $acres,
+                'tier'   => $tier,
+                'label'  => $label,
+                'source' => 'regrid',
+                'lat'    => $lat,
+                'lng'    => $lng,
+            ];
         }
 
         return [
-            'sqft'     => null,
-            'category' => null,
-            'label'    => null,
-            'source'   => 'manual_required',
-            'lat'      => $lat,
-            'lng'      => $lng,
+            'sqft'   => null,
+            'acres'  => null,
+            'tier'   => null,
+            'label'  => null,
+            'source' => 'manual_required',
+            'lat'    => $lat,
+            'lng'    => $lng,
         ];
     }
 
@@ -66,14 +73,13 @@ class LotSizeService {
         }
 
         $loc = $data['results'][0]['geometry']['location'];
-
         return [ 'lat' => (float) $loc['lat'], 'lng' => (float) $loc['lng'] ];
     }
 
     private function nominatim_geocode( string $street, string $city, string $state, string $zip ): ?array {
         $query    = urlencode( "{$street}, {$city}, {$state}, {$zip}, USA" );
         $url      = "https://nominatim.openstreetmap.org/search?q={$query}&format=json&limit=1";
-        $response = $this->http_get( $url, [ 'User-Agent' => 'JJPetWasteServices/1.0 (jjpetwasteservices.com)' ] );
+        $response = $this->http_get( $url, [ 'User-Agent' => 'JJPetWasteServices/1.0' ] );
 
         if ( ! $response ) {
             return null;
@@ -109,7 +115,7 @@ class LotSizeService {
         }
 
         $acres = (float) $data['results']['parcels']['features'][0]['properties']['ll_gisacre'];
-        $sqft  = (int) round( $acres * 43560 );
+        $sqft  = (int) round( $acres * LotSizeClassifier::SQFT_PER_ACRE );
 
         return $sqft > 0 ? $sqft : null;
     }
@@ -140,21 +146,13 @@ class LotSizeService {
 
     private function get_google_api_key(): string {
         $keys = get_option( 'jjpws_api_keys', [] );
-
-        if ( is_string( $keys ) ) {
-            $keys = maybe_unserialize( $keys );
-        }
-
-        return $keys['google_maps'] ?? '';
+        if ( is_string( $keys ) ) $keys = maybe_unserialize( $keys );
+        return is_array( $keys ) ? ( $keys['google_maps'] ?? '' ) : '';
     }
 
     private function get_regrid_api_key(): string {
         $keys = get_option( 'jjpws_api_keys', [] );
-
-        if ( is_string( $keys ) ) {
-            $keys = maybe_unserialize( $keys );
-        }
-
-        return $keys['regrid'] ?? '';
+        if ( is_string( $keys ) ) $keys = maybe_unserialize( $keys );
+        return is_array( $keys ) ? ( $keys['regrid'] ?? '' ) : '';
     }
 }

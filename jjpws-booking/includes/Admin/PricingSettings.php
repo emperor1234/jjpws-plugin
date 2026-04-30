@@ -3,59 +3,65 @@
 namespace JJPWS\Admin;
 
 use JJPWS\Services\PricingEngine;
-use JJPWS\Services\LotSizeClassifier;
 
 class PricingSettings {
 
-    private array $categories  = [ 'xs', 'sm', 'md', 'lg', 'xl' ];
-    private array $frequencies = [ 'twice_weekly', 'weekly', 'biweekly' ];
+    private array $dog_tiers = [
+        PricingEngine::DOG_TIER_1,
+        PricingEngine::DOG_TIER_2_3,
+        PricingEngine::DOG_TIER_4,
+    ];
+
+    private array $frequencies = [
+        PricingEngine::FREQ_TWICE_WEEKLY,
+        PricingEngine::FREQ_WEEKLY,
+        PricingEngine::FREQ_BIWEEKLY,
+    ];
 
     public function render(): void {
-        $matrix    = PricingEngine::get_matrix();
-        $labels    = LotSizeClassifier::all_labels();
-        $freq_labels = [
-            'twice_weekly' => 'Twice-a-Week',
-            'weekly'       => 'Weekly',
-            'biweekly'     => 'Bi-Weekly',
-        ];
-        $saved = isset( $_GET['saved'] );
+        $matrix      = PricingEngine::get_matrix();
+        $surcharges  = PricingEngine::get_surcharges();
+        $one_time    = PricingEngine::get_one_time_price_cents();
+        $dog_labels  = PricingEngine::DOG_TIER_LABELS;
+        $freq_labels = PricingEngine::FREQ_LABELS;
+        $time_opts   = PricingEngine::TIME_SINCE_OPTIONS;
+        $saved       = isset( $_GET['saved'] );
 
         include JJPWS_PLUGIN_DIR . 'templates/admin-pricing.php';
     }
 
     public function save( array $post ): void {
-        $matrix    = PricingEngine::get_matrix();
-        $categories  = [ 'xs', 'sm', 'md', 'lg', 'xl' ];
-        $frequencies = [ 'twice_weekly', 'weekly', 'biweekly' ];
+        // Pricing matrix (per-visit base prices, in dollars)
+        $matrix = PricingEngine::get_matrix();
 
-        foreach ( $categories as $cat ) {
-            foreach ( $frequencies as $freq ) {
-                if ( isset( $post["base_{$cat}_{$freq}"] ) ) {
-                    $dollars = floatval( $post["base_{$cat}_{$freq}"] );
-                    $matrix['base'][ $cat ][ $freq ] = (int) round( $dollars * 100 );
+        foreach ( $this->dog_tiers as $dt ) {
+            foreach ( $this->frequencies as $f ) {
+                $key = "base_{$dt}_{$f}";
+                if ( isset( $post[ $key ] ) ) {
+                    $matrix['base'][ $dt ][ $f ] = (int) round( floatval( $post[ $key ] ) * 100 );
                 }
             }
         }
 
-        foreach ( $frequencies as $freq ) {
-            if ( isset( $post["adder_{$freq}"] ) ) {
-                $dollars = floatval( $post["adder_{$freq}"] );
-                $matrix['dog_adder'][ $freq ] = (int) round( $dollars * 100 );
-            }
+        if ( isset( $post['acreage_premium_pct'] ) ) {
+            $matrix['acreage_premium_pct'] = max( 0, floatval( $post['acreage_premium_pct'] ) );
         }
 
         update_option( 'jjpws_pricing_matrix', wp_json_encode( $matrix ) );
 
-        // Update lot size thresholds
-        $thresholds = [];
-        foreach ( $categories as $cat ) {
-            $min = absint( $post["threshold_min_{$cat}"] ?? 0 );
-            $max = $cat === 'xl' ? PHP_INT_MAX : absint( $post["threshold_max_{$cat}"] ?? 0 );
-            $thresholds[ $cat ] = [ 'min' => $min, 'max' => $max ];
+        // Time-since-cleaned surcharges
+        $surcharges = PricingEngine::get_surcharges();
+        foreach ( [ 'recent', 'mid', 'long' ] as $key ) {
+            $field = "neglect_{$key}";
+            if ( isset( $post[ $field ] ) ) {
+                $surcharges['time_since_cleaned'][ $key ] = (int) round( floatval( $post[ $field ] ) * 100 );
+            }
         }
+        update_option( 'jjpws_surcharges', wp_json_encode( $surcharges ) );
 
-        if ( ! empty( array_filter( array_column( $thresholds, 'max' ) ) ) ) {
-            update_option( 'jjpws_lot_size_thresholds', wp_json_encode( $thresholds ) );
+        // One-time cleanup price
+        if ( isset( $post['one_time_price'] ) ) {
+            update_option( 'jjpws_one_time_price_cents', (int) round( floatval( $post['one_time_price'] ) * 100 ) );
         }
     }
 }

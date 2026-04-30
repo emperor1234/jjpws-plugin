@@ -7,6 +7,7 @@ use JJPWS\Controllers\BookingController;
 use JJPWS\Controllers\CheckoutController;
 use JJPWS\Controllers\WebhookController;
 use JJPWS\Controllers\AccountController;
+use JJPWS\Controllers\QuoteController;
 use JJPWS\Frontend\BookingForm;
 use JJPWS\Frontend\AccountTab;
 
@@ -42,7 +43,6 @@ class Plugin {
         $tab = new AccountTab();
         $this->loader->add_filter( 'woocommerce_account_menu_items', $tab, 'add_menu_item' );
         $this->loader->add_action( 'woocommerce_account_jjpws-subscriptions_endpoint', $tab, 'render_endpoint' );
-        // Fallback: native WP My Account (no WooCommerce)
         $this->loader->add_action( 'init', $tab, 'register_endpoint' );
         $this->loader->add_filter( 'query_vars', $tab, 'add_query_var', 0 );
         $this->loader->add_action( 'template_redirect', $tab, 'handle_redirect' );
@@ -52,19 +52,21 @@ class Plugin {
         $booking  = new BookingController();
         $checkout = new CheckoutController();
         $account  = new AccountController();
+        $quote    = new QuoteController();
 
-        // Booking — public (no login required)
+        // Public
         add_action( 'wp_ajax_nopriv_jjpws_lookup_lot_size', [ $booking, 'lookup_lot_size' ] );
-        add_action( 'wp_ajax_jjpws_lookup_lot_size', [ $booking, 'lookup_lot_size' ] );
+        add_action( 'wp_ajax_jjpws_lookup_lot_size',        [ $booking, 'lookup_lot_size' ] );
 
         add_action( 'wp_ajax_nopriv_jjpws_calculate_price', [ $booking, 'calculate_price' ] );
-        add_action( 'wp_ajax_jjpws_calculate_price', [ $booking, 'calculate_price' ] );
+        add_action( 'wp_ajax_jjpws_calculate_price',        [ $booking, 'calculate_price' ] );
 
-        // Checkout — requires login
+        add_action( 'wp_ajax_nopriv_jjpws_submit_quote',    [ $quote, 'submit_quote' ] );
+        add_action( 'wp_ajax_jjpws_submit_quote',           [ $quote, 'submit_quote' ] );
+
+        // Login required
         add_action( 'wp_ajax_jjpws_create_checkout_session', [ $checkout, 'create_session' ] );
-
-        // Account — requires login
-        add_action( 'wp_ajax_jjpws_cancel_subscription', [ $account, 'cancel_subscription' ] );
+        add_action( 'wp_ajax_jjpws_cancel_subscription',     [ $account,  'cancel_subscription' ] );
     }
 
     private function define_rest_hooks(): void {

@@ -3,6 +3,7 @@
 namespace JJPWS\Controllers;
 
 use JJPWS\Models\SubscriptionModel;
+use JJPWS\Services\PricingEngine;
 use JJPWS\Services\StripeService;
 use JJPWS\Services\EmailService;
 
@@ -66,10 +67,6 @@ class WebhookController {
                 $sub_id = $event->data->object->subscription ?? null;
                 if ( $sub_id ) {
                     $model->mark_past_due( $sub_id );
-                    $record = $model->find_by_stripe_sub( $sub_id );
-                    if ( $record ) {
-                        $email->send_payment_failed( (array) $record );
-                    }
                 }
                 break;
 
@@ -88,38 +85,62 @@ class WebhookController {
     private function handle_checkout_completed( object $session, SubscriptionModel $model, EmailService $email ): void {
         $meta = $session->metadata ?? null;
 
-        if ( empty( $meta->wp_user_id ) || empty( $session->subscription ) ) {
-            error_log( 'JJPWS checkout.session.completed missing metadata or subscription' );
+        if ( empty( $meta->wp_user_id ) ) {
+            error_log( 'JJPWS checkout.session.completed missing wp_user_id' );
             return;
         }
 
-        $stripe       = new StripeService();
-        $stripe_sub   = $stripe->retrieve_subscription( $session->subscription );
+        $service_type = $meta->service_type ?? PricingEngine::SERVICE_RECURRING;
 
-        $booking_data = [
-            'user_id'             => (int) $meta->wp_user_id,
-            'stripe_customer_id'  => $session->customer,
-            'stripe_sub_id'       => $stripe_sub->id,
-            'stripe_price_id'     => $stripe_sub->items->data[0]->price->id ?? '',
-            'street_address'      => $meta->street_address ?? '',
-            'city'                => $meta->city  ?? '',
-            'state'               => $meta->state ?? '',
-            'zip_code'            => $meta->zip_code ?? '',
-            'lat'                 => isset( $meta->lat )  ? floatval( $meta->lat )  : null,
-            'lng'                 => isset( $meta->lng )  ? floatval( $meta->lng )  : null,
-            'lot_size_sqft'       => isset( $meta->lot_size_sqft )  ? absint( $meta->lot_size_sqft )  : null,
-            'lot_size_category'   => $meta->lot_size_category ?? '',
-            'dog_count'           => absint( $meta->dog_count ?? 1 ),
-            'frequency'           => $meta->frequency ?? 'weekly',
-            'monthly_price_cents' => absint( $meta->monthly_price_cents ?? 0 ),
-            'stripe_status'       => $stripe_sub->status,
-            'current_period_end'  => date( 'Y-m-d H:i:s', $stripe_sub->current_period_end ),
+        $base = [
+            'user_id'                  => (int) $meta->wp_user_id,
+            'service_type'             => $service_type,
+            'stripe_customer_id'       => $session->customer,
+            'street_address'           => $meta->street_address ?? '',
+            'city'                     => $meta->city           ?? '',
+            'state'                    => $meta->state          ?? '',
+            'zip_code'                 => $meta->zip_code       ?? '',
+            'lat'                      => $meta->lat            !== '' ? floatval( $meta->lat )  : null,
+            'lng'                      => $meta->lng            !== '' ? floatval( $meta->lng )  : null,
+            'distance_miles'           => isset( $meta->distance_miles ) ? floatval( $meta->distance_miles ) : null,
+            'lot_size_sqft'            => isset( $meta->lot_size_sqft  ) && $meta->lot_size_sqft  !== '' ? absint( $meta->lot_size_sqft  ) : null,
+            'lot_size_acres'           => isset( $meta->lot_size_acres ) && $meta->lot_size_acres !== '' ? floatval( $meta->lot_size_acres ) : null,
+            'acreage_tier'             => $meta->acreage_tier   ?? 'small',
+            'dog_count'                => absint( $meta->dog_count ?? 1 ),
+            'dog_tier'                 => PricingEngine::dog_tier_for( absint( $meta->dog_count ?? 1 ) ) ?? '',
+            'frequency'                => $meta->frequency          ?? '',
+            'time_since_cleaned'       => $meta->time_since_cleaned ?? 'recent',
+            'annual_prepay'            => ! empty( $meta->annual_prepay ) && $meta->annual_prepay !== '0',
+            'distance_fee_cents'       => absint( $meta->distance_fee_cents      ?? 0 ),
+            'neglect_surcharge_cents'  => absint( $meta->neglect_surcharge_cents ?? 0 ),
+            'annual_discount_cents'    => absint( $meta->annual_discount_cents   ?? 0 ),
+            'recurring_monthly_cents'  => absint( $meta->recurring_monthly_cents ?? 0 ),
+            'total_price_cents'        => absint( $meta->total_price_cents       ?? 0 ),
         ];
 
-        $id = $model->create( $booking_data );
+        if ( $service_type === PricingEngine::SERVICE_ONE_TIME ) {
+            $base['stripe_payment_intent_id'] = $session->payment_intent ?? '';
+            $base['status']                   = 'completed';
+            $base['stripe_status']             = 'succeeded';
+        } else {
+            if ( empty( $session->subscription ) ) {
+                error_log( 'JJPWS recurring checkout missing subscription id' );
+                return;
+            }
+            $stripe     = new StripeService();
+            $stripe_sub = $stripe->retrieve_subscription( $session->subscription );
+
+            $base['stripe_sub_id']      = $stripe_sub->id;
+            $base['stripe_price_id']    = $stripe_sub->items->data[0]->price->id ?? '';
+            $base['stripe_status']      = $stripe_sub->status;
+            $base['current_period_end'] = date( 'Y-m-d H:i:s', $stripe_sub->current_period_end );
+            $base['status']             = 'active';
+        }
+
+        $id = $model->create( $base );
 
         if ( $id ) {
-            $email->send_confirmation( $booking_data );
+            $email->send_confirmation( $base );
         }
     }
 }

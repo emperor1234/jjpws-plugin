@@ -1,45 +1,42 @@
 <?php if ( ! defined( 'ABSPATH' ) ) exit; ?>
 
 <div class="wrap jjpws-admin-wrap">
-    <h1><?php esc_html_e( 'JJ Pet Waste — Pricing Settings', 'jjpws-booking' ); ?></h1>
+    <h1><?php esc_html_e( 'JJ Pet Waste — Pricing', 'jjpws-booking' ); ?></h1>
 
     <?php if ( $saved ) : ?>
-        <div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Pricing saved successfully.', 'jjpws-booking' ); ?></p></div>
+        <div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Pricing saved.', 'jjpws-booking' ); ?></p></div>
     <?php endif; ?>
 
     <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
         <?php wp_nonce_field( 'jjpws_save_pricing' ); ?>
         <input type="hidden" name="action" value="jjpws_save_pricing" />
 
-        <!-- Base Price Table -->
-        <h2><?php esc_html_e( 'Base Monthly Price (1 Dog)', 'jjpws-booking' ); ?></h2>
-        <p class="description"><?php esc_html_e( 'Enter prices in dollars (e.g. 60 for $60.00)', 'jjpws-booking' ); ?></p>
+        <h2><?php esc_html_e( 'Per-Service Base Rates (under 1 acre)', 'jjpws-booking' ); ?></h2>
+        <p class="description">
+            <?php esc_html_e( 'Per-visit prices in dollars. Yards 1–1.5 acres receive the premium below.', 'jjpws-booking' ); ?>
+        </p>
 
         <table class="wp-list-table widefat fixed striped jjpws-pricing-table">
             <thead>
                 <tr>
-                    <th><?php esc_html_e( 'Lot Size', 'jjpws-booking' ); ?></th>
+                    <th><?php esc_html_e( 'Dog Count', 'jjpws-booking' ); ?></th>
                     <?php foreach ( $freq_labels as $key => $label ) : ?>
                         <th><?php echo esc_html( $label ); ?></th>
                     <?php endforeach; ?>
                 </tr>
             </thead>
             <tbody>
-            <?php foreach ( $labels as $cat => $lot_label ) : ?>
+            <?php foreach ( $dog_labels as $dt => $dt_label ) : ?>
                 <tr>
-                    <td><strong><?php echo esc_html( $lot_label ); ?></strong></td>
-                    <?php foreach ( $freq_labels as $freq => $flabel ) :
-                        $val = number_format( ( $matrix['base'][ $cat ][ $freq ] ?? 0 ) / 100, 2 );
+                    <td><strong><?php echo esc_html( $dt_label ); ?></strong></td>
+                    <?php foreach ( $freq_labels as $f => $f_label ) :
+                        $val = number_format( ( $matrix['base'][ $dt ][ $f ] ?? 0 ) / 100, 2 );
                     ?>
                         <td>
-                            <label for="base_<?php echo esc_attr( "{$cat}_{$freq}" ); ?>" class="screen-reader-text">
-                                <?php echo esc_html( "{$lot_label} — {$flabel}" ); ?>
-                            </label>
                             <div class="jjpws-price-input">
                                 <span>$</span>
                                 <input type="number" step="0.01" min="0"
-                                       id="base_<?php echo esc_attr( "{$cat}_{$freq}" ); ?>"
-                                       name="base_<?php echo esc_attr( "{$cat}_{$freq}" ); ?>"
+                                       name="base_<?php echo esc_attr( "{$dt}_{$f}" ); ?>"
                                        value="<?php echo esc_attr( $val ); ?>" />
                             </div>
                         </td>
@@ -49,83 +46,54 @@
             </tbody>
         </table>
 
-        <!-- Dog Adder -->
-        <h2 style="margin-top:2em;"><?php esc_html_e( 'Per Additional Dog Adder (Monthly)', 'jjpws-booking' ); ?></h2>
-        <p class="description"><?php esc_html_e( 'Amount added per each dog above the first.', 'jjpws-booking' ); ?></p>
+        <h2 style="margin-top:2em;"><?php esc_html_e( '1–1.5 Acre Yard Premium', 'jjpws-booking' ); ?></h2>
+        <p class="description">
+            <?php esc_html_e( 'Percentage added to base rates for yards in the 1–1.5 acre tier.', 'jjpws-booking' ); ?>
+        </p>
+        <p>
+            <input type="number" step="0.1" min="0" max="100"
+                   name="acreage_premium_pct"
+                   value="<?php echo esc_attr( $matrix['acreage_premium_pct'] ?? 5 ); ?>"
+                   style="width:80px;" /> %
+        </p>
 
-        <table class="wp-list-table widefat fixed striped jjpws-pricing-table jjpws-adder-table">
+        <h2 style="margin-top:2em;"><?php esc_html_e( 'One-Time Cleanup Price', 'jjpws-booking' ); ?></h2>
+        <p class="description">
+            <?php esc_html_e( 'Flat price for a single cleanup of yards under 1.5 acres. The 1–1.5 acre premium and any neglect surcharge still apply.', 'jjpws-booking' ); ?>
+        </p>
+        <p>
+            <span>$</span>
+            <input type="number" step="0.01" min="0"
+                   name="one_time_price"
+                   value="<?php echo esc_attr( number_format( $one_time / 100, 2 ) ); ?>"
+                   style="width:120px;" />
+        </p>
+
+        <h2 style="margin-top:2em;"><?php esc_html_e( 'Neglect Surcharge — Time Since Last Cleaned', 'jjpws-booking' ); ?></h2>
+        <p class="description">
+            <?php esc_html_e( 'One-time surcharge applied to the first payment based on how long since the yard was last serviced.', 'jjpws-booking' ); ?>
+        </p>
+
+        <table class="wp-list-table widefat fixed striped jjpws-pricing-table" style="max-width:600px;">
             <thead>
                 <tr>
-                    <?php foreach ( $freq_labels as $key => $label ) : ?>
-                        <th><?php echo esc_html( $label ); ?></th>
-                    <?php endforeach; ?>
+                    <th><?php esc_html_e( 'Time Since Last Cleaned', 'jjpws-booking' ); ?></th>
+                    <th><?php esc_html_e( 'Surcharge ($)', 'jjpws-booking' ); ?></th>
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <?php foreach ( $freq_labels as $freq => $flabel ) :
-                        $val = number_format( ( $matrix['dog_adder'][ $freq ] ?? 0 ) / 100, 2 );
-                    ?>
-                        <td>
-                            <div class="jjpws-price-input">
-                                <span>$</span>
-                                <input type="number" step="0.01" min="0"
-                                       name="adder_<?php echo esc_attr( $freq ); ?>"
-                                       value="<?php echo esc_attr( $val ); ?>" />
-                            </div>
-                        </td>
-                    <?php endforeach; ?>
-                </tr>
-            </tbody>
-        </table>
-
-        <!-- Lot Size Thresholds -->
-        <h2 style="margin-top:2em;"><?php esc_html_e( 'Lot Size Thresholds (sq ft)', 'jjpws-booking' ); ?></h2>
-        <p class="description"><?php esc_html_e( 'Define the square footage boundaries for each lot size category.', 'jjpws-booking' ); ?></p>
-
-        <?php
-        $thresholds_raw = get_option( 'jjpws_lot_size_thresholds' );
-        $thresholds = [];
-        if ( $thresholds_raw ) {
-            $thresholds = json_decode( $thresholds_raw, true ) ?: [];
-        }
-        $default_thresholds = [
-            'xs' => [ 'min' => 0,     'max' => 2999  ],
-            'sm' => [ 'min' => 3000,  'max' => 5999  ],
-            'md' => [ 'min' => 6000,  'max' => 9999  ],
-            'lg' => [ 'min' => 10000, 'max' => 17999 ],
-            'xl' => [ 'min' => 18000, 'max' => PHP_INT_MAX ],
-        ];
-        ?>
-
-        <table class="wp-list-table widefat fixed striped jjpws-pricing-table">
-            <thead>
-                <tr>
-                    <th><?php esc_html_e( 'Category', 'jjpws-booking' ); ?></th>
-                    <th><?php esc_html_e( 'Min (sq ft)', 'jjpws-booking' ); ?></th>
-                    <th><?php esc_html_e( 'Max (sq ft)', 'jjpws-booking' ); ?></th>
-                </tr>
-            </thead>
-            <tbody>
-            <?php foreach ( $labels as $cat => $lot_label ) :
-                $t   = $thresholds[ $cat ] ?? $default_thresholds[ $cat ];
-                $min = $t['min'] ?? 0;
-                $max = $cat === 'xl' ? '' : ( $t['max'] ?? 0 );
+            <?php foreach ( $time_opts as $key => $opt ) :
+                $val = number_format( ( $surcharges['time_since_cleaned'][ $key ] ?? 0 ) / 100, 2 );
             ?>
                 <tr>
-                    <td><strong><?php echo esc_html( $lot_label ); ?></strong></td>
+                    <td><strong><?php echo esc_html( $opt['label'] ); ?></strong></td>
                     <td>
-                        <input type="number" min="0" name="threshold_min_<?php echo esc_attr( $cat ); ?>"
-                               value="<?php echo absint( $min ); ?>" />
-                    </td>
-                    <td>
-                        <?php if ( $cat === 'xl' ) : ?>
-                            <input type="text" value="Unlimited" readonly style="background:#f0f0f0;color:#888;" />
-                            <input type="hidden" name="threshold_max_<?php echo esc_attr( $cat ); ?>" value="999999999" />
-                        <?php else : ?>
-                            <input type="number" min="0" name="threshold_max_<?php echo esc_attr( $cat ); ?>"
-                                   value="<?php echo absint( $max ); ?>" />
-                        <?php endif; ?>
+                        <div class="jjpws-price-input">
+                            <span>$</span>
+                            <input type="number" step="0.01" min="0"
+                                   name="neglect_<?php echo esc_attr( $key ); ?>"
+                                   value="<?php echo esc_attr( $val ); ?>" />
+                        </div>
                     </td>
                 </tr>
             <?php endforeach; ?>

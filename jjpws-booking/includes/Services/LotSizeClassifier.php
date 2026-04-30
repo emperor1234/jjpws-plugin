@@ -4,54 +4,51 @@ namespace JJPWS\Services;
 
 class LotSizeClassifier {
 
+    public const TIER_SMALL  = 'small';   // <1.0 acre
+    public const TIER_MEDIUM = 'medium';  // 1.0–1.5 acres
+    public const TIER_LARGE  = 'large';   // 1.5+ acres → quote only
+
+    public const SQFT_PER_ACRE = 43560;
+
     private static array $labels = [
-        'xs' => 'Under 3,000 sq ft',
-        'sm' => '3,000 – 6,000 sq ft',
-        'md' => '6,000 – 10,000 sq ft',
-        'lg' => '10,000 – 18,000 sq ft',
-        'xl' => '18,000+ sq ft',
+        self::TIER_SMALL  => 'Under 1 acre',
+        self::TIER_MEDIUM => '1 – 1.5 acres',
+        self::TIER_LARGE  => 'Over 1.5 acres (custom quote)',
     ];
 
-    public static function classify( int $sqft ): string {
-        $thresholds = self::get_thresholds();
-
-        foreach ( $thresholds as $category => $range ) {
-            if ( $sqft >= $range['min'] && $sqft <= $range['max'] ) {
-                return $category;
-            }
+    /**
+     * Classify a lot by acreage. Returns null only if input invalid.
+     */
+    public static function classify_by_acres( float $acres ): string {
+        if ( $acres < 1.0 ) {
+            return self::TIER_SMALL;
         }
-
-        return 'xl';
+        if ( $acres < 1.5 ) {
+            return self::TIER_MEDIUM;
+        }
+        return self::TIER_LARGE;
     }
 
-    public static function label( string $category ): string {
-        return self::$labels[ $category ] ?? $category;
+    public static function classify_by_sqft( int $sqft ): string {
+        return self::classify_by_acres( self::sqft_to_acres( $sqft ) );
     }
 
-    public static function all_categories(): array {
-        return array_keys( self::$labels );
+    public static function sqft_to_acres( int $sqft ): float {
+        return round( $sqft / self::SQFT_PER_ACRE, 3 );
+    }
+
+    public static function label( string $tier ): string {
+        return self::$labels[ $tier ] ?? $tier;
     }
 
     public static function all_labels(): array {
         return self::$labels;
     }
 
-    private static function get_thresholds(): array {
-        $stored = get_option( 'jjpws_lot_size_thresholds' );
-
-        if ( $stored ) {
-            $decoded = json_decode( $stored, true );
-            if ( is_array( $decoded ) ) {
-                return $decoded;
-            }
-        }
-
-        return [
-            'xs' => [ 'min' => 0,     'max' => 2999  ],
-            'sm' => [ 'min' => 3000,  'max' => 5999  ],
-            'md' => [ 'min' => 6000,  'max' => 9999  ],
-            'lg' => [ 'min' => 10000, 'max' => 17999 ],
-            'xl' => [ 'min' => 18000, 'max' => PHP_INT_MAX ],
-        ];
+    /**
+     * Returns true if this tier requires a custom quote (no self-checkout).
+     */
+    public static function requires_quote( string $tier ): bool {
+        return $tier === self::TIER_LARGE;
     }
 }

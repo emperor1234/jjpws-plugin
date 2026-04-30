@@ -4,12 +4,24 @@ namespace JJPWS\Controllers;
 
 use JJPWS\Services\LotSizeService;
 use JJPWS\Services\LotSizeClassifier;
+use JJPWS\Services\DistanceService;
 use JJPWS\Services\PricingEngine;
 
 class BookingController {
 
-    private static array $valid_categories  = [ 'xs', 'sm', 'md', 'lg', 'xl' ];
-    private static array $valid_frequencies = [ 'twice_weekly', 'weekly', 'biweekly' ];
+    private static array $valid_acreage_tiers = [
+        LotSizeClassifier::TIER_SMALL,
+        LotSizeClassifier::TIER_MEDIUM,
+        LotSizeClassifier::TIER_LARGE,
+    ];
+
+    private static array $valid_frequencies = [
+        PricingEngine::FREQ_TWICE_WEEKLY,
+        PricingEngine::FREQ_WEEKLY,
+        PricingEngine::FREQ_BIWEEKLY,
+    ];
+
+    private static array $valid_time_since = [ 'recent', 'mid', 'long' ];
 
     public function lookup_lot_size(): void {
         check_ajax_referer( 'jjpws_nonce', 'nonce' );
@@ -28,33 +40,52 @@ class BookingController {
         }
 
         try {
-            $service = new LotSizeService();
-            $result  = $service->resolve_from_address( $street, $city, $state, $zip );
+            $lot      = ( new LotSizeService() )->resolve_from_address( $street, $city, $state, $zip );
+            $distance = null;
+            $miles    = null;
 
-            if ( ! $result ) {
-                wp_send_json_success( [
-                    'lot_size_sqft'     => null,
-                    'lot_size_category' => null,
-                    'lot_size_label'    => null,
-                    'source'            => 'manual_required',
-                    'message'           => "We couldn't auto-detect your lot size. Please select it below.",
-                ] );
+            if ( $lot && $lot['lat'] !== null && $lot['lng'] !== null ) {
+                $miles = ( new DistanceService() )->miles_to_customer( (float) $lot['lat'], (float) $lot['lng'] );
             }
 
-            if ( $result['source'] === 'manual_required' ) {
-                wp_send_json_success( array_merge( $result, [
-                    'message' => "We couldn't auto-detect your lot size. Please select it below.",
+            $distance_cfg = PricingEngine::get_distance_config();
+            $max_miles    = (float) $distance_cfg['max_miles'];
+            $out_of_range = ( $miles !== null && $miles > $max_miles );
+
+            $response = [
+                'distance_miles' => $miles,
+                'max_miles'      => $max_miles,
+                'free_miles'     => (float) $distance_cfg['free_miles'],
+                'per_mile_cents' => (int) $distance_cfg['per_mile_cents'],
+                'out_of_range'   => $out_of_range,
+            ];
+
+            if ( ! $lot ) {
+                wp_send_json_success( array_merge( $response, [
+                    'lot_size_sqft'     => null,
+                    'lot_size_acres'    => null,
+                    'lot_size_category' => null,
+                    'lot_size_label'    => null,
+                    'requires_quote'    => false,
+                    'source'            => 'manual_required',
+                    'message'           => "We couldn't auto-detect your lot size. Please select it below.",
                 ] ) );
             }
 
-            wp_send_json_success( [
-                'lot_size_sqft'     => $result['sqft'],
-                'lot_size_category' => $result['category'],
-                'lot_size_label'    => $result['label'],
-                'source'            => $result['source'],
-                'lat'               => $result['lat'],
-                'lng'               => $result['lng'],
-            ] );
+            $requires_quote = $lot['tier']
+                ? LotSizeClassifier::requires_quote( $lot['tier'] )
+                : false;
+
+            wp_send_json_success( array_merge( $response, [
+                'lot_size_sqft'     => $lot['sqft'],
+                'lot_size_acres'    => $lot['acres'],
+                'lot_size_category' => $lot['tier'],
+                'lot_size_label'    => $lot['label'],
+                'requires_quote'    => $requires_quote,
+                'source'            => $lot['source'],
+                'lat'               => $lot['lat'],
+                'lng'               => $lot['lng'],
+            ] ) );
 
         } catch ( \Throwable $e ) {
             error_log( 'JJPWS lookup_lot_size error: ' . $e->getMessage() );
@@ -65,16 +96,48 @@ class BookingController {
     public function calculate_price(): void {
         check_ajax_referer( 'jjpws_nonce', 'nonce' );
 
-        $category  = sanitize_text_field( $_POST['lot_size_category'] ?? '' );
-        $dog_count = absint( $_POST['dog_count'] ?? 0 );
-        $frequency = sanitize_text_field( $_POST['frequency'] ?? '' );
+        $service_type = sanitize_text_field( $_POST['service_type'] ?? PricingEngine::SERVICE_RECURRING );
+        $tier         = sanitize_text_field( $_POST['acreage_tier'] ?? '' );
+        $dogs         = absint( $_POST['dog_count'] ?? 0 );
+        $frequency    = sanitize_text_field( $_POST['frequency'] ?? PricingEngine::FREQ_WEEKLY );
+        $time_since   = sanitize_text_field( $_POST['time_since_cleaned'] ?? 'recent' );
+        $miles        = isset( $_POST['distance_miles'] ) ? floatval( $_POST['distance_miles'] ) : 0;
+        $annual       = ! empty( $_POST['annual_prepay'] ) && $_POST['annual_prepay'] !== '0';
 
-        if ( ! in_array( $category, self::$valid_categories, true ) ) {
+        if ( ! in_array( $tier, self::$valid_acreage_tiers, true ) ) {
             wp_send_json_error( [ 'code' => 'INVALID_LOT_SIZE', 'message' => 'Invalid lot size category.' ] );
         }
 
-        if ( $dog_count < 1 || $dog_count > 10 ) {
-            wp_send_json_error( [ 'code' => 'INVALID_DOG_COUNT', 'message' => 'Dog count must be between 1 and 10.' ] );
+        if ( LotSizeClassifier::requires_quote( $tier ) ) {
+            wp_send_json_success( [ 'requires_quote' => true, 'reason' => 'large_lot' ] );
+        }
+
+        if ( ! in_array( $time_since, self::$valid_time_since, true ) ) {
+            $time_since = 'recent';
+        }
+
+        if ( $service_type === PricingEngine::SERVICE_ONE_TIME ) {
+            try {
+                $breakdown = PricingEngine::calculate( [
+                    'service_type'       => PricingEngine::SERVICE_ONE_TIME,
+                    'acreage_tier'       => $tier,
+                    'time_since_cleaned' => $time_since,
+                    'distance_miles'     => $miles,
+                ] );
+                wp_send_json_success( [ 'requires_quote' => false, 'breakdown' => $breakdown ] );
+            } catch ( \Throwable $e ) {
+                error_log( 'JJPWS calc one-time error: ' . $e->getMessage() );
+                wp_send_json_error( [ 'code' => 'INTERNAL_ERROR', 'message' => 'Pricing error. Please try again.' ] );
+            }
+        }
+
+        // Recurring path
+        if ( $dogs < 1 ) {
+            wp_send_json_error( [ 'code' => 'INVALID_DOG_COUNT', 'message' => 'Please enter the number of dogs.' ] );
+        }
+
+        if ( PricingEngine::requires_quote_for_dogs( $dogs ) ) {
+            wp_send_json_success( [ 'requires_quote' => true, 'reason' => 'too_many_dogs' ] );
         }
 
         if ( ! in_array( $frequency, self::$valid_frequencies, true ) ) {
@@ -82,26 +145,21 @@ class BookingController {
         }
 
         try {
-            $cents  = PricingEngine::calculate( $category, $dog_count, $frequency );
-            $matrix = PricingEngine::get_matrix();
-            $base   = $matrix['base'][ $category ][ $frequency ];
-            $adder  = $matrix['dog_adder'][ $frequency ];
-            $extra  = max( 0, $dog_count - 1 );
-
-            wp_send_json_success( [
-                'monthly_price_cents'     => $cents,
-                'monthly_price_formatted' => PricingEngine::format_cents( $cents ),
-                'breakdown' => [
-                    'base_price_cents'      => $base,
-                    'extra_dogs_adder_cents' => $adder * $extra,
-                    'extra_dog_count'        => $extra,
-                    'adder_per_dog_cents'    => $adder,
-                ],
+            $breakdown = PricingEngine::calculate( [
+                'service_type'       => PricingEngine::SERVICE_RECURRING,
+                'acreage_tier'       => $tier,
+                'dog_count'          => $dogs,
+                'frequency'          => $frequency,
+                'time_since_cleaned' => $time_since,
+                'distance_miles'     => $miles,
+                'annual_prepay'      => $annual,
             ] );
+
+            wp_send_json_success( [ 'requires_quote' => false, 'breakdown' => $breakdown ] );
 
         } catch ( \Throwable $e ) {
             error_log( 'JJPWS calculate_price error: ' . $e->getMessage() );
-            wp_send_json_error( [ 'code' => 'INTERNAL_ERROR', 'message' => 'Something went wrong. Please try again.' ] );
+            wp_send_json_error( [ 'code' => 'INTERNAL_ERROR', 'message' => 'Pricing error. Please try again.' ] );
         }
     }
 
@@ -110,7 +168,7 @@ class BookingController {
         $key = 'jjpws_rate_' . md5( $ip );
         $hit = (int) get_transient( $key );
 
-        if ( $hit >= 10 ) {
+        if ( $hit >= 30 ) {
             return false;
         }
 

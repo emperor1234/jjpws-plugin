@@ -7,7 +7,7 @@ use Stripe\Customer;
 use Stripe\Checkout\Session;
 use Stripe\Subscription;
 use Stripe\Price;
-use JJPWS\Models\SubscriptionModel;
+use JJPWS\Services\PricingEngine;
 
 class StripeService {
 
@@ -17,115 +17,196 @@ class StripeService {
     }
 
     /**
-     * Create a Stripe Checkout Session for a recurring subscription.
+     * Create a Stripe Checkout Session.
      *
-     * Returns the hosted checkout URL.
+     * Handles three modes:
+     *  - One-time service     → mode: 'payment'
+     *  - Recurring monthly    → mode: 'subscription'
+     *  - Recurring annual     → mode: 'subscription' with yearly interval
      */
     public function create_checkout_session(
-        int    $user_id,
-        int    $monthly_price_cents,
-        string $lot_size_category,
-        int    $dog_count,
+        int $user_id,
+        string $service_type,
+        array $breakdown,
+        array $address,
+        string $acreage_tier,
+        int $dog_count,
         string $frequency,
-        string $street,
-        string $city,
-        string $state,
-        string $zip,
-        ?float $lat,
-        ?float $lng,
-        ?int   $sqft,
-        string $success_url,
-        string $cancel_url
+        string $time_since_cleaned,
+        bool $annual_prepay,
+        string $return_url
     ): string {
-        $user            = get_userdata( $user_id );
-        $stripe_cust_id  = get_user_meta( $user_id, 'jjpws_stripe_customer_id', true );
+        $user             = get_userdata( $user_id );
+        $stripe_cust_id   = get_user_meta( $user_id, 'jjpws_stripe_customer_id', true );
 
         if ( empty( $stripe_cust_id ) ) {
-            $customer       = Customer::create( [
-                'email' => $user->user_email,
-                'name'  => $user->display_name,
+            $customer = Customer::create( [
+                'email'    => $user->user_email,
+                'name'     => $user->display_name,
                 'metadata' => [ 'wp_user_id' => $user_id ],
             ] );
             $stripe_cust_id = $customer->id;
             update_user_meta( $user_id, 'jjpws_stripe_customer_id', $stripe_cust_id );
         }
 
-        $price_id = $this->get_or_create_price( $monthly_price_cents, $lot_size_category, $dog_count, $frequency );
+        $metadata = [
+            'wp_user_id'              => $user_id,
+            'service_type'            => $service_type,
+            'street_address'          => $address['street'] ?? '',
+            'city'                    => $address['city']   ?? '',
+            'state'                   => $address['state']  ?? '',
+            'zip_code'                => $address['zip']    ?? '',
+            'lat'                     => $address['lat']    ?? '',
+            'lng'                     => $address['lng']    ?? '',
+            'lot_size_sqft'           => $address['sqft']   ?? '',
+            'lot_size_acres'          => $address['acres']  ?? '',
+            'distance_miles'          => $address['miles']  ?? 0,
+            'acreage_tier'            => $acreage_tier,
+            'dog_count'               => $dog_count,
+            'frequency'               => $frequency,
+            'time_since_cleaned'      => $time_since_cleaned,
+            'annual_prepay'           => $annual_prepay ? '1' : '0',
+            'total_price_cents'       => $breakdown['total_cents'] ?? 0,
+            'recurring_monthly_cents' => $breakdown['recurring_monthly_cents'] ?? 0,
+            'distance_fee_cents'      => $breakdown['distance_fee_monthly'] ?? ( $breakdown['distance_fee_cents'] ?? 0 ),
+            'neglect_surcharge_cents' => $breakdown['neglect_surcharge_cents'] ?? 0,
+            'annual_discount_cents'   => $breakdown['annual_savings_cents'] ?? 0,
+        ];
+
+        if ( $service_type === PricingEngine::SERVICE_ONE_TIME ) {
+            return $this->create_one_time_session( $stripe_cust_id, $breakdown, $metadata, $return_url );
+        }
+
+        if ( $annual_prepay ) {
+            return $this->create_annual_session( $stripe_cust_id, $breakdown, $metadata, $return_url );
+        }
+
+        return $this->create_monthly_session( $stripe_cust_id, $breakdown, $metadata, $return_url );
+    }
+
+    private function create_one_time_session( string $cust_id, array $breakdown, array $metadata, string $return_url ): string {
+        $total = (int) $breakdown['total_cents'];
 
         $session = Session::create( [
-            'customer'           => $stripe_cust_id,
-            'mode'               => 'subscription',
-            'line_items'         => [ [ 'price' => $price_id, 'quantity' => 1 ] ],
-            'success_url'        => $success_url . '?booking=success&session_id={CHECKOUT_SESSION_ID}',
-            'cancel_url'         => $cancel_url  . '?booking=cancelled',
-            'metadata'           => [
-                'wp_user_id'        => $user_id,
-                'street_address'    => $street,
-                'city'              => $city,
-                'state'             => $state,
-                'zip_code'          => $zip,
-                'lat'               => $lat,
-                'lng'               => $lng,
-                'lot_size_sqft'     => $sqft,
-                'lot_size_category' => $lot_size_category,
-                'dog_count'         => $dog_count,
-                'frequency'         => $frequency,
-                'monthly_price_cents' => $monthly_price_cents,
-            ],
-            'subscription_data' => [
-                'metadata' => [
-                    'wp_user_id'        => $user_id,
-                    'lot_size_category' => $lot_size_category,
-                    'dog_count'         => $dog_count,
-                    'frequency'         => $frequency,
+            'customer'    => $cust_id,
+            'mode'        => 'payment',
+            'line_items'  => [ [
+                'quantity'    => 1,
+                'price_data'  => [
+                    'currency'     => 'usd',
+                    'unit_amount'  => $total,
+                    'product_data' => [
+                        'name' => 'JJ Pet Waste — One-Time Cleanup',
+                    ],
                 ],
+            ] ],
+            'success_url' => $return_url . '?booking=success&session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url'  => $return_url . '?booking=cancelled',
+            'metadata'    => $metadata,
+            'payment_intent_data' => [
+                'metadata' => $metadata,
             ],
         ] );
 
         return $session->url;
     }
 
-    /**
-     * Cancel a Stripe subscription at period end.
-     */
+    private function create_monthly_session( string $cust_id, array $breakdown, array $metadata, string $return_url ): string {
+        $monthly = (int) $breakdown['recurring_monthly_cents'];
+        $surcharge = (int) ( $breakdown['neglect_surcharge_cents'] ?? 0 );
+
+        $line_items = [ [
+            'quantity'   => 1,
+            'price_data' => [
+                'currency'     => 'usd',
+                'unit_amount'  => $monthly,
+                'recurring'    => [ 'interval' => 'month' ],
+                'product_data' => [ 'name' => 'JJ Pet Waste — Monthly Service' ],
+            ],
+        ] ];
+
+        $session_args = [
+            'customer'    => $cust_id,
+            'mode'        => 'subscription',
+            'line_items'  => $line_items,
+            'success_url' => $return_url . '?booking=success&session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url'  => $return_url . '?booking=cancelled',
+            'metadata'    => $metadata,
+            'subscription_data' => [
+                'metadata' => $metadata,
+            ],
+        ];
+
+        // First-month neglect surcharge as one-time line item
+        if ( $surcharge > 0 ) {
+            $session_args['line_items'][] = [
+                'quantity'   => 1,
+                'price_data' => [
+                    'currency'     => 'usd',
+                    'unit_amount'  => $surcharge,
+                    'product_data' => [ 'name' => 'First-time cleanup surcharge' ],
+                ],
+            ];
+        }
+
+        return Session::create( $session_args )->url;
+    }
+
+    private function create_annual_session( string $cust_id, array $breakdown, array $metadata, string $return_url ): string {
+        $annual_total = (int) $breakdown['annual_total_cents'];
+        $surcharge    = (int) ( $breakdown['neglect_surcharge_cents'] ?? 0 );
+
+        $line_items = [ [
+            'quantity'   => 1,
+            'price_data' => [
+                'currency'     => 'usd',
+                'unit_amount'  => $annual_total,
+                'recurring'    => [ 'interval' => 'year' ],
+                'product_data' => [ 'name' => 'JJ Pet Waste — Annual Service (10% off)' ],
+            ],
+        ] ];
+
+        $session_args = [
+            'customer'    => $cust_id,
+            'mode'        => 'subscription',
+            'line_items'  => $line_items,
+            'success_url' => $return_url . '?booking=success&session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url'  => $return_url . '?booking=cancelled',
+            'metadata'    => $metadata,
+            'subscription_data' => [
+                'metadata' => $metadata,
+            ],
+        ];
+
+        if ( $surcharge > 0 ) {
+            $session_args['line_items'][] = [
+                'quantity'   => 1,
+                'price_data' => [
+                    'currency'     => 'usd',
+                    'unit_amount'  => $surcharge,
+                    'product_data' => [ 'name' => 'First-time cleanup surcharge' ],
+                ],
+            ];
+        }
+
+        return Session::create( $session_args )->url;
+    }
+
     public function cancel_at_period_end( string $stripe_sub_id ): Subscription {
-        return Subscription::update( $stripe_sub_id, [
-            'cancel_at_period_end' => true,
-        ] );
+        return Subscription::update( $stripe_sub_id, [ 'cancel_at_period_end' => true ] );
     }
 
     public function retrieve_subscription( string $stripe_sub_id ): Subscription {
         return Subscription::retrieve( $stripe_sub_id );
     }
 
+    public function retrieve_session( string $session_id ): Session {
+        return Session::retrieve( $session_id );
+    }
+
     public function verify_webhook( string $payload, string $sig_header ): \Stripe\Event {
         $secret = get_option( 'jjpws_stripe_webhook_secret', '' );
         return \Stripe\Webhook::constructEvent( $payload, $sig_header, $secret );
-    }
-
-    private function get_or_create_price( int $cents, string $lot_size, int $dogs, string $frequency ): string {
-        $nickname = "jjpws_{$lot_size}_{$frequency}_{$dogs}dogs_{$cents}c";
-
-        // Search for existing price with this nickname to avoid duplicates
-        $prices = Price::all( [ 'limit' => 100, 'type' => 'recurring' ] );
-
-        foreach ( $prices->data as $p ) {
-            if ( ( $p->nickname ?? '' ) === $nickname && $p->unit_amount === $cents && $p->active ) {
-                return $p->id;
-            }
-        }
-
-        $price = Price::create( [
-            'currency'        => 'usd',
-            'unit_amount'     => $cents,
-            'nickname'        => $nickname,
-            'recurring'       => [ 'interval' => 'month' ],
-            'product_data'    => [
-                'name' => "JJ Pet Waste — {$lot_size} lot, {$dogs} dog(s), {$frequency}",
-            ],
-        ] );
-
-        return $price->id;
     }
 
     private function get_secret_key(): string {
