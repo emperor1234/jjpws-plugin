@@ -17,3 +17,158 @@
     color: #3c434a;
     font-weight: 600;
 }
+
+/* ── Guide page ─────────────────────────────────────────────────── */
+.jjpws-guide__intro {
+    font-size: 14px;
+    color: #50575e;
+    margin: 1em 0 1.5em;
+    max-width: 800px;
+}
+
+.jjpws-guide__card {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 8px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+
+.jjpws-guide__card h2 {
+    margin-top: 0;
+    color: #1d2327;
+    border-bottom: 1px solid #f0f0f1;
+    padding-bottom: .6em;
+}
+
+.jjpws-guide__card h3 {
+    margin-top: 1.5em;
+    font-size: 16px;
+}
+
+.jjpws-guide__card h4 {
+    margin: 1.2em 0 .4em;
+    font-size: 14px;
+    color: #50575e;
+}
+
+.jjpws-guide__card pre.jjpws-formula {
+    background: #f6f7f7;
+    border-left: 4px solid #2c7a3d;
+    padding: 1rem;
+    border-radius: 4px;
+    font-size: 12.5px;
+    overflow-x: auto;
+}
+
+.jjpws-guide__card details {
+    background: #f6f7f7;
+    border-radius: 4px;
+    padding: .8rem 1rem;
+    margin: .6em 0;
+    border-left: 3px solid #c3c4c7;
+}
+
+.jjpws-guide__card details[open] {
+    border-left-color: #2c7a3d;
+}
+
+.jjpws-guide__card details summary {
+    cursor: pointer;
+    color: #1d2327;
+}
+
+.jjpws-guide__card details p {
+    margin: .8em 0 0;
+    color: #50575e;
+}
+
+/* Checklist */
+.jjpws-checklist {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.jjpws-checklist li {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .55em .8em;
+    border-radius: 4px;
+    margin-bottom: 4px;
+    background: #f9f9f9;
+}
+
+.jjpws-checklist li.done    { background: #edfaf0; }
+.jjpws-checklist li.pending { background: #fef3c7; }
+
+.jjpws-checklist__icon {
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.jjpws-checklist li.done .jjpws-checklist__icon    { background: #2c7a3d; color: #fff; }
+.jjpws-checklist li.pending .jjpws-checklist__icon { background: #d97706; color: #fff; }
+
+.jjpws-checklist li a { text-decoration: none; }
+.jjpws-checklist li small { color: #6b7280; font-style: italic; }
+
+/* Step list */
+.jjpws-guide__steps {
+    counter-reset: stepnum;
+    list-style: none;
+    padding-left: 0;
+}
+
+.jjpws-guide__steps li {
+    counter-increment: stepnum;
+    padding-left: 2.4em;
+    position: relative;
+    margin: .6em 0;
+}
+
+.jjpws-guide__steps li::before {
+    content: counter(stepnum);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1.7em;
+    height: 1.7em;
+    background: #2c7a3d;
+    color: #fff;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 12px;
+}
+
+/* Shortcode block */
+.jjpws-shortcode {
+    background: #f0f0f1;
+    border: 1px dashed #8c8f94;
+    border-radius: 4px;
+    padding: .8em 1em;
+    display: inline-flex;
+    align-items: center;
+    gap: 1em;
+    margin: .8em 0;
+}
+
+.jjpws-shortcode code {
+    background: none;
+    font-size: 14px;
+    font-weight: 600;
+    color: #2c7a3d;
+}
+
+/* Status table */
+.jjpws-guide__status table { max-width: 700px; }
+.jjpws-guide__status th    { width: 200px; text-align: left; }

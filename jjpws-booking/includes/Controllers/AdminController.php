@@ -53,6 +53,43 @@ class AdminController {
             'jjpws-settings',
             [ $this, 'render_settings' ]
         );
+
+        add_submenu_page(
+            'jjpws-dashboard',
+            'Setup Guide',
+            'Setup Guide',
+            'manage_options',
+            'jjpws-guide',
+            [ $this, 'render_guide' ]
+        );
+    }
+
+    public function render_guide(): void {
+        if ( ! current_user_can( 'manage_options' ) ) wp_die( 'Access denied.' );
+
+        $business_address = get_option( 'jjpws_business_address', '' );
+        $business_email   = get_option( 'jjpws_business_email', '' );
+        $keys             = get_option( 'jjpws_api_keys', [] );
+        if ( is_string( $keys ) ) $keys = maybe_unserialize( $keys );
+        if ( ! is_array( $keys ) ) $keys = [];
+
+        $webhook_secret  = get_option( 'jjpws_stripe_webhook_secret', '' );
+        $allow_register  = (int) get_option( 'users_can_register' );
+        $webhook_url     = get_rest_url( null, 'jjpws/v1/stripe-webhook' );
+        $stripe_mode     = get_option( 'jjpws_stripe_mode', 'test' );
+
+        $checks = [
+            'business_address' => ! empty( $business_address ),
+            'business_email'   => ! empty( $business_email ),
+            'google_maps'      => ! empty( $keys['google_maps'] ),
+            'regrid'           => ! empty( $keys['regrid'] ),
+            'stripe_test'      => ! empty( $keys['stripe_test_secret'] ),
+            'stripe_live'      => ! empty( $keys['stripe_live_secret'] ),
+            'webhook_secret'   => ! empty( $webhook_secret ),
+            'allow_register'   => (bool) $allow_register,
+        ];
+
+        include JJPWS_PLUGIN_DIR . 'templates/admin-guide.php';
     }
 
     public function render_dashboard(): void {
