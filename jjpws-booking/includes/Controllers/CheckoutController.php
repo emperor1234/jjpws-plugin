@@ -45,7 +45,17 @@ class CheckoutController {
         $lng   = isset( $_POST['lng'] )            ? floatval( $_POST['lng'] )            : null;
         $sqft  = isset( $_POST['lot_size_sqft'] )  ? absint( $_POST['lot_size_sqft'] )    : null;
         $acres = isset( $_POST['lot_size_acres'] ) ? floatval( $_POST['lot_size_acres'] ) : null;
-        $miles = isset( $_POST['distance_miles'] ) ? floatval( $_POST['distance_miles'] ) : 0;
+
+        // Server-side distance recompute — never trust client miles
+        $miles = 0;
+        if ( $lat !== null && $lng !== null && ( $lat !== 0.0 || $lng !== 0.0 ) ) {
+            $computed = ( new \JJPWS\Services\DistanceService() )->miles_to_customer( $lat, $lng );
+            if ( $computed !== null ) {
+                $miles = (float) $computed;
+            } elseif ( isset( $_POST['distance_miles'] ) ) {
+                $miles = max( 0, floatval( $_POST['distance_miles'] ) );
+            }
+        }
 
         // ── Validation ────────────────────────────────────────────────────────
         if ( strlen( $street ) < 5 || empty( $city ) || empty( $state ) || ! preg_match( '/^\d{5}$/', $zip ) ) {

@@ -91,8 +91,8 @@
                 </label>
                 <select id="jjpws-lot-manual-select">
                     <option value=""><?php esc_html_e( '— Select lot size —', 'jjpws-booking' ); ?></option>
-                    <option value="small"><?php esc_html_e( 'Under 1 acre', 'jjpws-booking' ); ?></option>
-                    <option value="medium"><?php esc_html_e( '1 – 1.5 acres', 'jjpws-booking' ); ?></option>
+                    <option value="small"><?php esc_html_e( 'Under 0.75 acre', 'jjpws-booking' ); ?></option>
+                    <option value="medium"><?php esc_html_e( '0.75 – 1.5 acres', 'jjpws-booking' ); ?></option>
                     <option value="large"><?php esc_html_e( 'Over 1.5 acres', 'jjpws-booking' ); ?></option>
                 </select>
                 <span class="jjpws-field-error" id="err-lot-manual"></span>

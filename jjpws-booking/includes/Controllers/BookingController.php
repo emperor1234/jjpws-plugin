@@ -101,8 +101,11 @@ class BookingController {
         $dogs         = absint( $_POST['dog_count'] ?? 0 );
         $frequency    = sanitize_text_field( $_POST['frequency'] ?? PricingEngine::FREQ_WEEKLY );
         $time_since   = sanitize_text_field( $_POST['time_since_cleaned'] ?? 'recent' );
-        $miles        = isset( $_POST['distance_miles'] ) ? floatval( $_POST['distance_miles'] ) : 0;
         $annual       = ! empty( $_POST['annual_prepay'] ) && $_POST['annual_prepay'] !== '0';
+
+        // Server-side distance recalc when lat/lng provided. Falls back to client-supplied
+        // distance only if we can't compute it ourselves. Never trust client miles.
+        $miles = $this->resolve_distance_miles();
 
         if ( ! in_array( $tier, self::$valid_acreage_tiers, true ) ) {
             wp_send_json_error( [ 'code' => 'INVALID_LOT_SIZE', 'message' => 'Invalid lot size category.' ] );
@@ -124,7 +127,11 @@ class BookingController {
                     'time_since_cleaned' => $time_since,
                     'distance_miles'     => $miles,
                 ] );
-                wp_send_json_success( [ 'requires_quote' => false, 'breakdown' => $breakdown ] );
+                wp_send_json_success( [
+                    'requires_quote' => false,
+                    'breakdown'      => $breakdown,
+                    'distance_miles' => $miles,
+                ] );
             } catch ( \Throwable $e ) {
                 error_log( 'JJPWS calc one-time error: ' . $e->getMessage() );
                 wp_send_json_error( [ 'code' => 'INTERNAL_ERROR', 'message' => 'Pricing error. Please try again.' ] );
@@ -161,6 +168,24 @@ class BookingController {
             error_log( 'JJPWS calculate_price error: ' . $e->getMessage() );
             wp_send_json_error( [ 'code' => 'INTERNAL_ERROR', 'message' => 'Pricing error. Please try again.' ] );
         }
+    }
+
+    /**
+     * Resolve customer distance. Prefers server-side haversine from lat/lng;
+     * falls back to client-supplied value only if server-side calc fails.
+     */
+    private function resolve_distance_miles(): float {
+        $lat = isset( $_POST['lat'] ) ? floatval( $_POST['lat'] ) : null;
+        $lng = isset( $_POST['lng'] ) ? floatval( $_POST['lng'] ) : null;
+
+        if ( $lat !== null && $lng !== null && ( $lat !== 0.0 || $lng !== 0.0 ) ) {
+            $computed = ( new \JJPWS\Services\DistanceService() )->miles_to_customer( $lat, $lng );
+            if ( $computed !== null ) {
+                return (float) $computed;
+            }
+        }
+
+        return isset( $_POST['distance_miles'] ) ? max( 0, floatval( $_POST['distance_miles'] ) ) : 0;
     }
 
     private function check_rate_limit(): bool {

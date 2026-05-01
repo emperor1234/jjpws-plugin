@@ -11,9 +11,9 @@
         <?php wp_nonce_field( 'jjpws_save_pricing' ); ?>
         <input type="hidden" name="action" value="jjpws_save_pricing" />
 
-        <h2><?php esc_html_e( 'Per-Service Base Rates (under 1 acre)', 'jjpws-booking' ); ?></h2>
+        <h2><?php esc_html_e( 'Per-Service Base Rates (under 0.75 acre)', 'jjpws-booking' ); ?></h2>
         <p class="description">
-            <?php esc_html_e( 'Per-visit prices in dollars. Yards 1–1.5 acres receive the premium below.', 'jjpws-booking' ); ?>
+            <?php esc_html_e( 'Per-visit prices in dollars. Yards 0.75–1.5 acres receive the premium below.', 'jjpws-booking' ); ?>
         </p>
 
         <table class="wp-list-table widefat fixed striped jjpws-pricing-table">
@@ -46,9 +46,9 @@
             </tbody>
         </table>
 
-        <h2 style="margin-top:2em;"><?php esc_html_e( '1–1.5 Acre Yard Premium', 'jjpws-booking' ); ?></h2>
+        <h2 style="margin-top:2em;"><?php esc_html_e( '0.75–1.5 Acre Yard Premium', 'jjpws-booking' ); ?></h2>
         <p class="description">
-            <?php esc_html_e( 'Percentage added to base rates for yards in the 1–1.5 acre tier.', 'jjpws-booking' ); ?>
+            <?php esc_html_e( 'Percentage added to base rates for yards in the 0.75–1.5 acre tier.', 'jjpws-booking' ); ?>
         </p>
         <p>
             <input type="number" step="0.1" min="0" max="100"

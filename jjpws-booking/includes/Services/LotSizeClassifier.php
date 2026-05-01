@@ -4,15 +4,15 @@ namespace JJPWS\Services;
 
 class LotSizeClassifier {
 
-    public const TIER_SMALL  = 'small';   // <1.0 acre
-    public const TIER_MEDIUM = 'medium';  // 1.0–1.5 acres
+    public const TIER_SMALL  = 'small';   // <0.75 acre
+    public const TIER_MEDIUM = 'medium';  // 0.75–1.5 acres
     public const TIER_LARGE  = 'large';   // 1.5+ acres → quote only
 
     public const SQFT_PER_ACRE = 43560;
 
     private static array $labels = [
-        self::TIER_SMALL  => 'Under 1 acre',
-        self::TIER_MEDIUM => '1 – 1.5 acres',
+        self::TIER_SMALL  => 'Under 0.75 acre',
+        self::TIER_MEDIUM => '0.75 – 1.5 acres',
         self::TIER_LARGE  => 'Over 1.5 acres (custom quote)',
     ];
 
@@ -20,7 +20,7 @@ class LotSizeClassifier {
      * Classify a lot by acreage. Returns null only if input invalid.
      */
     public static function classify_by_acres( float $acres ): string {
-        if ( $acres < 1.0 ) {
+        if ( $acres < 0.75 ) {
             return self::TIER_SMALL;
         }
         if ( $acres < 1.5 ) {

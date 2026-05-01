@@ -67,8 +67,8 @@
             <tr><td colspan="11"><?php esc_html_e( 'No customers found.', 'jjpws-booking' ); ?></td></tr>
         <?php else :
             $acreage_labels = [
-                'small'  => 'Under 1 ac',
-                'medium' => '1–1.5 ac',
+                'small'  => 'Under 0.75 ac',
+                'medium' => '0.75–1.5 ac',
                 'large'  => 'Over 1.5 ac',
             ];
             $freq_labels = [

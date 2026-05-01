@@ -90,6 +90,13 @@
 
             const d = json.data;
             state.distanceMiles = d.distance_miles;
+            // Always capture coords if returned, regardless of lot-detection outcome —
+            // the server needs them to recompute distance authoritatively.
+            if (d.lat) state.lat = d.lat;
+            if (d.lng) state.lng = d.lng;
+            if (d.lat) $('jjpws-lat').value = d.lat;
+            if (d.lng) $('jjpws-lng').value = d.lng;
+            $('jjpws-distance-miles').value = d.distance_miles ?? '';
 
             // Out of range
             if (d.out_of_range) {
@@ -99,7 +106,6 @@
                     'out_of_range',
                     `Your address is approximately ${d.distance_miles} miles from us, beyond our ${d.max_miles}-mile service radius.`
                 );
-                $('jjpws-distance-miles').value = d.distance_miles ?? '';
                 return;
             }
 
@@ -225,6 +231,8 @@
                 dog_count: state.dogCount,
                 frequency: state.frequency,
                 time_since_cleaned: state.timeSinceCleaned,
+                lat: state.lat ?? '',
+                lng: state.lng ?? '',
                 distance_miles: state.distanceMiles ?? 0,
                 annual_prepay: state.annualPrepay ? '1' : '0',
             };
@@ -232,6 +240,11 @@
             const json = await post('jjpws_calculate_price', body);
 
             if (!json.success) return;
+
+            // Server may have recomputed distance more accurately
+            if (typeof json.data.distance_miles === 'number') {
+                state.distanceMiles = json.data.distance_miles;
+            }
 
             if (json.data.requires_quote) {
                 state.breakdown = null;
@@ -284,12 +297,17 @@
         } else {
             label.textContent = 'Monthly Cost:';
             amount.textContent = fmt(b.monthly_cents);
-            breakdown.innerHTML = renderBreakdownRows([
-                ['Per visit', b.per_visit_total_cents],
+            const rows = [
+                ['Per visit (base)', b.base_per_visit_cents + (b.acreage_premium_cents || 0)],
                 ['Visits per month', b.visits_per_month, true],
-                ['Travel fee (monthly)', b.distance_fee_monthly],
-                ['First-month neglect surcharge', b.neglect_surcharge_cents],
-            ]);
+            ];
+            if (b.distance_fee_monthly > 0) {
+                rows.push([`Travel fee (${(state.distanceMiles ?? 0).toFixed(1)} mi)`, b.distance_fee_monthly]);
+            }
+            if (b.neglect_surcharge_cents > 0) {
+                rows.push(['First-month neglect surcharge', b.neglect_surcharge_cents]);
+            }
+            breakdown.innerHTML = renderBreakdownRows(rows);
         }
 
         preview.style.display = 'block';
@@ -375,7 +393,7 @@
             mid:    '4–7 weeks ago',
             long:   '8+ weeks ago / new yard',
         };
-        const acreLabels = { small: 'Under 1 acre', medium: '1–1.5 acres' };
+        const acreLabels = { small: 'Under 0.75 acre', medium: '0.75–1.5 acres' };
 
         const isOneTime = state.serviceType === 'one_time';
 
@@ -655,8 +673,8 @@
             }
         });
 
-        // Address change → re-lookup
-        ['jjpws-zip'].forEach(id => {
+        // Address change → re-lookup (any field blur, when all four are filled)
+        ['jjpws-street', 'jjpws-city', 'jjpws-state', 'jjpws-zip'].forEach(id => {
             $(id)?.addEventListener('change', lookupLotSize);
         });
         document.addEventListener('jjpws:addressSelected', lookupLotSize);

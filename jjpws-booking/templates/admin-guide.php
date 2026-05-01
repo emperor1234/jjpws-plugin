@@ -167,8 +167,8 @@
 
         <h3><a href="<?php echo esc_url( admin_url( 'admin.php?page=jjpws-pricing' ) ); ?>">JJ Pet Waste → Pricing</a></h3>
         <ul>
-            <li><strong>Per-Service Base Rates</strong> — 9 cells = 3 dog tiers (1, 2–3, 4) × 3 frequencies (Twice/Wk, Weekly, Bi-Weekly). These are <strong>per-visit</strong> prices.</li>
-            <li><strong>1–1.5 Acre Yard Premium</strong> — percent added to base rates for the larger acreage tier (default 5%).</li>
+            <li><strong>Per-Service Base Rates</strong> — 9 cells = 3 dog tiers (1, 2–3, 4) × 3 frequencies (Twice/Wk, Weekly, Bi-Weekly). These are <strong>per-visit</strong> prices for yards under 0.75 acres.</li>
+            <li><strong>0.75–1.5 Acre Yard Premium</strong> — percent added to base rates for the larger acreage tier (default 5%).</li>
             <li><strong>One-Time Cleanup Price</strong> — flat price for a single service of yards under 1.5 acres.</li>
             <li><strong>Neglect Surcharge</strong> — three editable rows for "less than 4 weeks ago" (default $0), "4–7 weeks ago" ($25), "8+ weeks ago/new yard" ($50). Applied as a one-time line item on the first payment.</li>
         </ul>
@@ -198,7 +198,7 @@
 
         <p><strong>For recurring service:</strong></p>
         <pre class="jjpws-formula">
-per_visit  = base[dog_tier][frequency] × (1 + acreage_premium% if 1–1.5 ac else 0)
+per_visit  = base[dog_tier][frequency] × (1 + acreage_premium% if 0.75–1.5 ac else 0)
 per_visit += distance_fee_per_visit       (= max(0, miles − free_miles) × per_mile_rate)
 monthly    = per_visit × visits_per_month  (weekly=4, bi=2, twice=8)
 first_pay  = monthly + neglect_surcharge
@@ -209,7 +209,7 @@ If annual prepay:
 
         <p><strong>For one-time cleanup:</strong></p>
         <pre class="jjpws-formula">
-total = one_time_price × (1 + acreage_premium% if 1–1.5 ac else 0)
+total = one_time_price × (1 + acreage_premium% if 0.75–1.5 ac else 0)
       + distance_fee
       + neglect_surcharge</pre>
 

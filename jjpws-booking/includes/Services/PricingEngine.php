@@ -280,7 +280,7 @@ class PricingEngine {
         return [
             'free_miles'     => 5,
             'per_mile_cents' => 250,
-            'max_miles'      => 15,
+            'max_miles'      => 10,
         ];
     }
 
