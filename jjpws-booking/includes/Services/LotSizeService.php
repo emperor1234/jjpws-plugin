@@ -10,7 +10,7 @@ class LotSizeService {
      * Returns array: [ sqft, acres, tier, label, source, lat, lng ]
      * or null if even geocoding failed.
      *
-     * `source` will be 'manual_required' when geocoding worked but parcel
+     * `source` will be 'manual_required' when geocoding worked but the parcel
      * lookup didn't — the form falls back to a manual selector silently.
      */
     public function resolve_from_address( string $street, string $city, string $state, string $zip ): ?array {
@@ -22,19 +22,19 @@ class LotSizeService {
 
         [ 'lat' => $lat, 'lng' => $lng ] = $coords;
 
-        $sqft = $this->regrid_lookup( $lat, $lng );
+        $acres = $this->arcgis_lookup( $lat, $lng );
 
-        if ( $sqft !== null ) {
-            $acres = LotSizeClassifier::sqft_to_acres( $sqft );
+        if ( $acres !== null && $acres > 0 ) {
+            $sqft  = (int) round( $acres * LotSizeClassifier::SQFT_PER_ACRE );
             $tier  = LotSizeClassifier::classify_by_acres( $acres );
             $label = LotSizeClassifier::label( $tier );
 
             return [
                 'sqft'   => $sqft,
-                'acres'  => $acres,
+                'acres'  => round( $acres, 3 ),
                 'tier'   => $tier,
                 'label'  => $label,
-                'source' => 'regrid',
+                'source' => 'arcgis',
                 'lat'    => $lat,
                 'lng'    => $lng,
             ];
@@ -62,15 +62,9 @@ class LotSizeService {
         $url      = "https://maps.googleapis.com/maps/api/geocode/json?address={$address}&key={$api_key}";
         $response = $this->http_get( $url );
 
-        if ( ! $response ) {
-            return null;
-        }
-
+        if ( ! $response ) return null;
         $data = json_decode( $response, true );
-
-        if ( empty( $data['results'][0]['geometry']['location'] ) ) {
-            return null;
-        }
+        if ( empty( $data['results'][0]['geometry']['location'] ) ) return null;
 
         $loc = $data['results'][0]['geometry']['location'];
         return [ 'lat' => (float) $loc['lat'], 'lng' => (float) $loc['lng'] ];
@@ -81,43 +75,66 @@ class LotSizeService {
         $url      = "https://nominatim.openstreetmap.org/search?q={$query}&format=json&limit=1";
         $response = $this->http_get( $url, [ 'User-Agent' => 'JJPetWasteServices/1.0' ] );
 
-        if ( ! $response ) {
-            return null;
-        }
-
+        if ( ! $response ) return null;
         $data = json_decode( $response, true );
-
-        if ( empty( $data[0]['lat'] ) ) {
-            return null;
-        }
+        if ( empty( $data[0]['lat'] ) ) return null;
 
         return [ 'lat' => (float) $data[0]['lat'], 'lng' => (float) $data[0]['lon'] ];
     }
 
-    private function regrid_lookup( float $lat, float $lng ): ?int {
-        $api_key = $this->get_regrid_api_key();
+    /**
+     * Query an ArcGIS Feature/MapServer endpoint for the parcel containing the
+     * given point. Endpoint and acreage field name are admin-configurable.
+     *
+     * Default endpoint: Cherokee County GA GIS — public open data.
+     *
+     * @return float|null acres, or null on miss/failure
+     */
+    private function arcgis_lookup( float $lat, float $lng ): ?float {
+        $endpoint = $this->get_arcgis_endpoint();
+        $field    = $this->get_arcgis_field();
 
-        if ( empty( $api_key ) ) {
+        if ( empty( $endpoint ) || empty( $field ) ) {
             return null;
         }
 
-        $url      = "https://app.regrid.com/api/v1/parcel.json?lat={$lat}&lon={$lng}&token={$api_key}&fields=ll_gisacre";
+        $params = [
+            'geometry'       => "{$lng},{$lat}",
+            'geometryType'   => 'esriGeometryPoint',
+            'inSR'           => '4326',
+            'spatialRel'     => 'esriSpatialRelIntersects',
+            'outFields'      => $field,
+            'outSR'          => '4326',
+            'returnGeometry' => 'false',
+            'f'              => 'json',
+        ];
+
+        // Strip any pre-existing query string the admin may have pasted in
+        $base = strtok( $endpoint, '?' );
+        $url  = $base . '?' . http_build_query( $params );
+
         $response = $this->http_get( $url );
-
-        if ( ! $response ) {
-            return null;
-        }
+        if ( ! $response ) return null;
 
         $data = json_decode( $response, true );
+        if ( empty( $data['features'][0]['attributes'] ) ) return null;
 
-        if ( empty( $data['results']['parcels']['features'][0]['properties']['ll_gisacre'] ) ) {
-            return null;
+        $attrs = $data['features'][0]['attributes'];
+
+        // Try exact field, then a few common case variants
+        $value = $attrs[ $field ] ?? null;
+        if ( $value === null ) {
+            foreach ( $attrs as $k => $v ) {
+                if ( strcasecmp( $k, $field ) === 0 ) {
+                    $value = $v;
+                    break;
+                }
+            }
         }
 
-        $acres = (float) $data['results']['parcels']['features'][0]['properties']['ll_gisacre'];
-        $sqft  = (int) round( $acres * LotSizeClassifier::SQFT_PER_ACRE );
+        if ( $value === null || $value === '' ) return null;
 
-        return $sqft > 0 ? $sqft : null;
+        return (float) $value;
     }
 
     private function http_get( string $url, array $extra_headers = [] ): ?string {
@@ -135,7 +152,6 @@ class LotSizeService {
         }
 
         $code = wp_remote_retrieve_response_code( $response );
-
         if ( $code !== 200 ) {
             error_log( "JJPWS LotSizeService HTTP {$code} for {$url}" );
             return null;
@@ -150,9 +166,14 @@ class LotSizeService {
         return is_array( $keys ) ? ( $keys['google_maps'] ?? '' ) : '';
     }
 
-    private function get_regrid_api_key(): string {
-        $keys = get_option( 'jjpws_api_keys', [] );
-        if ( is_string( $keys ) ) $keys = maybe_unserialize( $keys );
-        return is_array( $keys ) ? ( $keys['regrid'] ?? '' ) : '';
+    private function get_arcgis_endpoint(): string {
+        return trim( (string) get_option(
+            'jjpws_parcel_endpoint',
+            'https://gis.cherokeecountyga.gov/arcgis/rest/services/MainLayers/MapServer/1/query'
+        ) );
+    }
+
+    private function get_arcgis_field(): string {
+        return trim( (string) get_option( 'jjpws_parcel_acreage_field', 'Acreage' ) );
     }
 }

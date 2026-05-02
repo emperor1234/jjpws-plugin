@@ -285,6 +285,16 @@
         </div>
     </form>
 
+    <?php
+    $jjpws_attribution = trim( (string) get_option(
+        'jjpws_parcel_attribution',
+        'Parcel data © Georgia GIS / Georgia Open Data. Boundaries and acreage are for reference only and do not constitute a legal survey.'
+    ) );
+    if ( $jjpws_attribution ) :
+    ?>
+    <p class="jjpws-attribution"><?php echo esc_html( $jjpws_attribution ); ?></p>
+    <?php endif; ?>
+
     <!-- Quote Request Modal/Section -->
     <div id="jjpws-quote-form" class="jjpws-quote-form" style="display:none;">
         <h3><?php esc_html_e( 'Request a Custom Quote', 'jjpws-booking' ); ?></h3>

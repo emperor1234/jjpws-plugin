@@ -82,7 +82,7 @@ class AdminController {
             'business_address' => ! empty( $business_address ),
             'business_email'   => ! empty( $business_email ),
             'google_maps'      => ! empty( $keys['google_maps'] ),
-            'regrid'           => ! empty( $keys['regrid'] ),
+            'parcel_endpoint'  => ! empty( get_option( 'jjpws_parcel_endpoint' ) ),
             'stripe_test'      => ! empty( $keys['stripe_test_secret'] ),
             'stripe_live'      => ! empty( $keys['stripe_live_secret'] ),
             'webhook_secret'   => ! empty( $webhook_secret ),
@@ -169,7 +169,6 @@ class AdminController {
 
         $key_fields = [
             'google_maps',
-            'regrid',
             'stripe_test_secret',
             'stripe_live_secret',
         ];
@@ -180,10 +179,25 @@ class AdminController {
             }
         }
 
+        // Remove any legacy Regrid token (no longer used)
+        unset( $keys['regrid'] );
+
         update_option( 'jjpws_api_keys', $keys );
 
         if ( ! empty( $_POST['stripe_webhook_secret_direct'] ) ) {
             update_option( 'jjpws_stripe_webhook_secret', sanitize_text_field( $_POST['stripe_webhook_secret_direct'] ) );
+        }
+
+        // Parcel data (ArcGIS REST endpoint)
+        if ( isset( $_POST['parcel_endpoint'] ) ) {
+            update_option( 'jjpws_parcel_endpoint', esc_url_raw( trim( $_POST['parcel_endpoint'] ) ) );
+        }
+        if ( isset( $_POST['parcel_acreage_field'] ) ) {
+            $field = sanitize_text_field( $_POST['parcel_acreage_field'] );
+            update_option( 'jjpws_parcel_acreage_field', $field !== '' ? $field : 'Acreage' );
+        }
+        if ( isset( $_POST['parcel_attribution'] ) ) {
+            update_option( 'jjpws_parcel_attribution', sanitize_text_field( $_POST['parcel_attribution'] ) );
         }
 
         // Color
@@ -212,6 +226,10 @@ class AdminController {
         $one_time_cents   = (int) get_option( 'jjpws_one_time_price_cents', 7000 );
         $primary_color    = get_option( 'jjpws_primary_color', '#2c7a3d' );
         $origin_coords    = get_option( 'jjpws_business_origin_coords' );
+
+        $parcel_endpoint    = get_option( 'jjpws_parcel_endpoint', 'https://gis.cherokeecountyga.gov/arcgis/rest/services/MainLayers/MapServer/1/query' );
+        $parcel_field       = get_option( 'jjpws_parcel_acreage_field', 'Acreage' );
+        $parcel_attribution = get_option( 'jjpws_parcel_attribution', 'Parcel data © Georgia GIS / Georgia Open Data. Boundaries and acreage are for reference only and do not constitute a legal survey.' );
 
         if ( is_string( $keys ) ) $keys = maybe_unserialize( $keys );
         if ( ! is_array( $keys ) ) $keys = [];

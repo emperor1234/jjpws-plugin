@@ -141,7 +141,47 @@
             </tbody>
         </table>
 
-        <h2 style="margin-top:2em;"><?php esc_html_e( 'External APIs', 'jjpws-booking' ); ?></h2>
+        <h2 style="margin-top:2em;"><?php esc_html_e( 'Parcel Data (ArcGIS / Open Data)', 'jjpws-booking' ); ?></h2>
+        <p class="description">
+            <?php esc_html_e( 'Lot size lookup uses a public ArcGIS REST endpoint — typically your county GIS open data feed. Default is Cherokee County, GA. Override below if you serve a different county.', 'jjpws-booking' ); ?>
+        </p>
+        <table class="form-table">
+            <tbody>
+                <tr>
+                    <th><label for="parcel_endpoint"><?php esc_html_e( 'ArcGIS Query Endpoint', 'jjpws-booking' ); ?></label></th>
+                    <td>
+                        <input type="url" id="parcel_endpoint" name="parcel_endpoint"
+                               value="<?php echo esc_attr( $parcel_endpoint ); ?>" class="large-text" />
+                        <p class="description">
+                            <?php esc_html_e( 'Full URL to the FeatureServer/MapServer layer\'s /query endpoint. Example:', 'jjpws-booking' ); ?>
+                            <br>
+                            <code>https://gis.cherokeecountyga.gov/arcgis/rest/services/MainLayers/MapServer/1/query</code>
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="parcel_acreage_field"><?php esc_html_e( 'Acreage Field Name', 'jjpws-booking' ); ?></label></th>
+                    <td>
+                        <input type="text" id="parcel_acreage_field" name="parcel_acreage_field"
+                               value="<?php echo esc_attr( $parcel_field ); ?>" class="regular-text" />
+                        <p class="description">
+                            <?php esc_html_e( 'The attribute field on each parcel that holds acreage. Common names: "Acreage", "ACRES", "GIS_ACRES".', 'jjpws-booking' ); ?>
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="parcel_attribution"><?php esc_html_e( 'Attribution Text', 'jjpws-booking' ); ?></label></th>
+                    <td>
+                        <textarea id="parcel_attribution" name="parcel_attribution" rows="2" class="large-text"><?php echo esc_textarea( $parcel_attribution ); ?></textarea>
+                        <p class="description">
+                            <?php esc_html_e( 'Shown below the booking form to credit the data source and disclaim that boundaries are reference-only.', 'jjpws-booking' ); ?>
+                        </p>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2 style="margin-top:2em;"><?php esc_html_e( 'Google Maps API', 'jjpws-booking' ); ?></h2>
         <table class="form-table">
             <tbody>
                 <tr>
@@ -151,16 +191,9 @@
                         <?php if ( ! empty( $keys['google_maps'] ) ) : ?>
                             <p class="description" style="color:green;">✓ Saved. Leave blank to keep.</p>
                         <?php endif; ?>
-                    </td>
-                </tr>
-                <tr>
-                    <th><?php esc_html_e( 'Regrid API Token', 'jjpws-booking' ); ?></th>
-                    <td>
-                        <input type="password" name="regrid" class="regular-text" autocomplete="off" />
-                        <?php if ( ! empty( $keys['regrid'] ) ) : ?>
-                            <p class="description" style="color:green;">✓ Saved. Leave blank to keep.</p>
-                        <?php endif; ?>
-                        <p class="description"><?php esc_html_e( 'Required for automatic lot size detection. Without it, customers manually pick the acreage tier.', 'jjpws-booking' ); ?></p>
+                        <p class="description">
+                            <?php esc_html_e( 'Used for address autocomplete and geocoding (street address → lat/lng). Without it, free Nominatim/OpenStreetMap is used as a fallback (slower, less accurate).', 'jjpws-booking' ); ?>
+                        </p>
                     </td>
                 </tr>
             </tbody>

@@ -107,5 +107,23 @@ class Activator {
         if ( ! get_option( 'jjpws_stripe_mode' ) ) {
             update_option( 'jjpws_stripe_mode', 'test' );
         }
+
+        if ( get_option( 'jjpws_parcel_endpoint' ) === false ) {
+            update_option(
+                'jjpws_parcel_endpoint',
+                'https://gis.cherokeecountyga.gov/arcgis/rest/services/MainLayers/MapServer/1/query'
+            );
+        }
+
+        if ( get_option( 'jjpws_parcel_acreage_field' ) === false ) {
+            update_option( 'jjpws_parcel_acreage_field', 'Acreage' );
+        }
+
+        if ( get_option( 'jjpws_parcel_attribution' ) === false ) {
+            update_option(
+                'jjpws_parcel_attribution',
+                'Parcel data © Georgia GIS / Georgia Open Data. Boundaries and acreage are for reference only and do not constitute a legal survey.'
+            );
+        }
     }
 }

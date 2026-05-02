@@ -633,6 +633,17 @@
     margin-top: 4px;
 }
 
+/* ── Attribution / disclaimer ──────────────────────────────────────── */
+.jjpws-attribution {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--jjpws-border);
+    font-size: 11px;
+    color: var(--jjpws-muted);
+    line-height: 1.4;
+    text-align: center;
+}
+
 /* ── Admin styles ─────────────────────────────────────────────────── */
 .jjpws-stats {
     display: flex;

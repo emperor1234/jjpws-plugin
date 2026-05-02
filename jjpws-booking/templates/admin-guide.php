@@ -34,12 +34,12 @@
                 </a>
                 <small><?php esc_html_e( '— enables address autocomplete', 'jjpws-booking' ); ?></small>
             </li>
-            <li class="<?php echo $checks['regrid'] ? 'done' : 'pending'; ?>">
-                <span class="jjpws-checklist__icon"><?php echo $checks['regrid'] ? '✓' : '○'; ?></span>
+            <li class="<?php echo $checks['parcel_endpoint'] ? 'done' : 'pending'; ?>">
+                <span class="jjpws-checklist__icon"><?php echo $checks['parcel_endpoint'] ? '✓' : '○'; ?></span>
                 <a href="<?php echo esc_url( admin_url( 'admin.php?page=jjpws-settings' ) ); ?>">
-                    <?php esc_html_e( 'Regrid API token', 'jjpws-booking' ); ?>
+                    <?php esc_html_e( 'Parcel ArcGIS endpoint', 'jjpws-booking' ); ?>
                 </a>
-                <small><?php esc_html_e( '— enables auto lot size detection', 'jjpws-booking' ); ?></small>
+                <small><?php esc_html_e( '— enables auto lot size detection from county GIS', 'jjpws-booking' ); ?></small>
             </li>
             <li class="<?php echo ( $checks['stripe_test'] || $checks['stripe_live'] ) ? 'done' : 'pending'; ?>">
                 <span class="jjpws-checklist__icon"><?php echo ( $checks['stripe_test'] || $checks['stripe_live'] ) ? '✓' : '○'; ?></span>
@@ -160,7 +160,7 @@
         <h4>External APIs</h4>
         <ul>
             <li><strong>Google Maps API Key</strong> — needed for address autocomplete and geocoding. Get one at <a href="https://console.cloud.google.com/google/maps-apis/start" target="_blank" rel="noopener">Google Cloud Console</a>. Enable: <em>Maps JavaScript API</em>, <em>Places API</em>, <em>Geocoding API</em>.</li>
-            <li><strong>Regrid API Token</strong> — needed for automatic lot size detection. Sign up at <a href="https://regrid.com" target="_blank" rel="noopener">regrid.com</a>. Free tier covers 1,000 lookups/month. <em>Without this, the form falls back to a manual "select your lot size" dropdown.</em></li>
+            <li><strong>Parcel Data (ArcGIS / Open Data)</strong> — automatic lot size detection uses a public county GIS endpoint. Default: Cherokee County GA. To use a different county, find that county's ArcGIS REST services page (search "[county name] GIS open data"), open the parcel layer, and copy the <code>/query</code> URL into the <strong>ArcGIS Query Endpoint</strong> field. Adjust the <strong>Acreage Field Name</strong> if it differs (common names: Acreage, ACRES, GIS_ACRES). Totally free and legal as long as the attribution is shown — which it is by default.</li>
         </ul>
 
         <hr>
@@ -237,7 +237,7 @@ total = one_time_price × (1 + acreage_premium% if 0.75–1.5 ac else 0)
 
         <details>
             <summary><strong>The form always asks customers to manually pick lot size</strong></summary>
-            <p>You haven't entered a Regrid API token in <a href="<?php echo esc_url( admin_url( 'admin.php?page=jjpws-settings' ) ); ?>">Settings</a>. Without it the plugin can't look up parcel sizes. Sign up at <a href="https://regrid.com" target="_blank" rel="noopener">regrid.com</a> (free tier).</p>
+            <p>Either the ArcGIS endpoint is empty/wrong in <a href="<?php echo esc_url( admin_url( 'admin.php?page=jjpws-settings' ) ); ?>">Settings → Parcel Data</a>, OR the address is in a county whose GIS data isn't covered by your configured endpoint. Verify the URL works by opening it in a browser (it should return JSON, not an error page). Confirm the <strong>Acreage Field Name</strong> matches a real attribute on the parcel layer — open the FeatureServer page and check the field list.</p>
         </details>
 
         <details>
