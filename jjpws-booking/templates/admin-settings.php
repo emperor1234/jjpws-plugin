@@ -181,6 +181,93 @@
             </tbody>
         </table>
 
+        <h3 style="margin-top:1.5em;"><?php esc_html_e( 'Test Parcel Lookup', 'jjpws-booking' ); ?></h3>
+        <p class="description">
+            <?php esc_html_e( 'Run a live lookup against the configured ArcGIS endpoint. Use a real address inside your service area. The result shows exactly what the GIS server returned, so you can spot config issues at a glance.', 'jjpws-booking' ); ?>
+        </p>
+        <table class="form-table" id="jjpws-diag-form">
+            <tbody>
+                <tr>
+                    <th><label><?php esc_html_e( 'Test Address', 'jjpws-booking' ); ?></label></th>
+                    <td>
+                        <input type="text" id="jjpws-diag-street" placeholder="Street" class="regular-text" />
+                        <input type="text" id="jjpws-diag-city"   placeholder="City"   />
+                        <input type="text" id="jjpws-diag-state"  placeholder="State"  size="3" />
+                        <input type="text" id="jjpws-diag-zip"    placeholder="ZIP"    size="6" />
+                        <br>
+                        <button type="button" class="button button-secondary" id="jjpws-diag-run" style="margin-top:8px;">
+                            <?php esc_html_e( 'Run Diagnostic', 'jjpws-booking' ); ?>
+                        </button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div id="jjpws-diag-result" style="display:none; margin:1em 0; padding:1em; background:#f6f7f7; border-left:4px solid #2c7a3d; border-radius:4px;"></div>
+
+        <script>
+        (function () {
+            const ajaxUrl = <?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
+            const nonce   = <?php echo wp_json_encode( wp_create_nonce( 'jjpws_diagnose' ) ); ?>;
+            const btn     = document.getElementById('jjpws-diag-run');
+            const out     = document.getElementById('jjpws-diag-result');
+
+            btn?.addEventListener('click', async () => {
+                btn.disabled = true;
+                btn.textContent = 'Running…';
+                out.style.display = 'block';
+                out.innerHTML = '<em>Looking up…</em>';
+
+                const fd = new FormData();
+                fd.append('action', 'jjpws_diagnose_parcel');
+                fd.append('nonce', nonce);
+                fd.append('street', document.getElementById('jjpws-diag-street').value.trim());
+                fd.append('city',   document.getElementById('jjpws-diag-city').value.trim());
+                fd.append('state',  document.getElementById('jjpws-diag-state').value.trim());
+                fd.append('zip',    document.getElementById('jjpws-diag-zip').value.trim());
+
+                try {
+                    const res  = await fetch(ajaxUrl, { method: 'POST', body: fd });
+                    const json = await res.json();
+                    out.innerHTML = renderDiag(json);
+                } catch (e) {
+                    out.innerHTML = '<strong style="color:red;">Network error:</strong> ' + e.message;
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = 'Run Diagnostic';
+                }
+            });
+
+            function renderDiag(json) {
+                if (!json.success) {
+                    return `<strong style="color:#c0392b;">Failed at ${json.data?.stage || 'unknown'} stage:</strong><br>${json.data?.message || 'Unknown error'}`;
+                }
+                const g = json.data.geocoded;
+                const p = json.data.parcel;
+                let html = `<h4 style="margin-top:0;">Geocoding ✓</h4>`;
+                html += `<p>Lat/Lng: <code>${g.lat}, ${g.lng}</code></p>`;
+                html += `<h4>Parcel Lookup</h4>`;
+                if (p.acres !== null) {
+                    html += `<p style="color:#2c7a3d;"><strong>✓ Found parcel:</strong> ${p.acres} acres (matched field: <code>${p.matched_field}</code>)</p>`;
+                } else {
+                    html += `<p style="color:#c0392b;"><strong>✗ ${p.error || 'No data returned'}</strong></p>`;
+                }
+                html += `<details style="margin-top:1em;"><summary><strong>Request URL</strong></summary><textarea readonly rows="3" style="width:100%;font-family:monospace;font-size:11px;">${escapeHtml(p.request_url || '')}</textarea></details>`;
+                if (p.attributes) {
+                    html += `<details style="margin-top:.5em;"><summary><strong>Returned attributes</strong></summary><pre style="font-size:11px;overflow:auto;max-height:200px;">${escapeHtml(JSON.stringify(p.attributes, null, 2))}</pre></details>`;
+                }
+                if (p.response_excerpt && !p.attributes) {
+                    html += `<details style="margin-top:.5em;"><summary><strong>Raw response (first 1500 chars)</strong></summary><pre style="font-size:11px;overflow:auto;max-height:200px;">${escapeHtml(p.response_excerpt)}</pre></details>`;
+                }
+                return html;
+            }
+
+            function escapeHtml(s) {
+                return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            }
+        })();
+        </script>
+
         <h2 style="margin-top:2em;"><?php esc_html_e( 'Google Maps API', 'jjpws-booking' ); ?></h2>
         <table class="form-table">
             <tbody>

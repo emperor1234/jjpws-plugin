@@ -210,6 +210,46 @@ class AdminController {
         exit;
     }
 
+    /**
+     * Admin AJAX: run a live parcel-lookup diagnostic for a given address.
+     * Surfaces the geocoded coords, the exact ArcGIS request URL, the HTTP
+     * status, and the raw response so the admin can see exactly why a
+     * lookup is failing.
+     */
+    public function diagnose_parcel(): void {
+        check_ajax_referer( 'jjpws_diagnose', 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( [ 'message' => 'Access denied.' ], 403 );
+        }
+
+        $street = sanitize_text_field( $_POST['street'] ?? '' );
+        $city   = sanitize_text_field( $_POST['city']   ?? '' );
+        $state  = sanitize_text_field( $_POST['state']  ?? '' );
+        $zip    = sanitize_text_field( $_POST['zip']    ?? '' );
+
+        if ( ! $street || ! $city || ! $state || ! $zip ) {
+            wp_send_json_error( [ 'message' => 'All four address fields are required.' ] );
+        }
+
+        $service = new \JJPWS\Services\LotSizeService();
+        $coords  = $service->geocode_public( $street, $city, $state, $zip );
+
+        if ( ! $coords ) {
+            wp_send_json_error( [
+                'stage'   => 'geocoding',
+                'message' => 'Could not geocode the address. Check your Google Maps API key (Geocoding API must be enabled), or this address may not exist.',
+            ] );
+        }
+
+        $diag = $service->arcgis_lookup_diagnostic( $coords['lat'], $coords['lng'] );
+
+        wp_send_json_success( [
+            'geocoded'  => $coords,
+            'parcel'    => $diag,
+        ] );
+    }
+
     public function enqueue_assets( string $hook ): void {
         if ( strpos( $hook, 'jjpws' ) === false ) return;
         wp_enqueue_style( 'jjpws-admin', JJPWS_PLUGIN_URL . 'assets/css/admin.css', [], JJPWS_VERSION );

@@ -33,6 +33,7 @@ class Plugin {
         $this->loader->add_action( 'admin_post_jjpws_save_pricing', $admin, 'save_pricing' );
         $this->loader->add_action( 'admin_post_jjpws_save_settings', $admin, 'save_settings' );
         $this->loader->add_action( 'admin_enqueue_scripts', $admin, 'enqueue_assets' );
+        add_action( 'wp_ajax_jjpws_diagnose_parcel', [ $admin, 'diagnose_parcel' ] );
     }
 
     private function define_public_hooks(): void {
