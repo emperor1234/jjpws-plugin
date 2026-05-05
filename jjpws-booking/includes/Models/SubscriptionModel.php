@@ -49,7 +49,23 @@ class SubscriptionModel {
         ];
 
         $result = $wpdb->insert( $this->table, $row );
-        return $result ? $wpdb->insert_id : false;
+
+        if ( $result === false ) {
+            error_log( 'JJPWS SubscriptionModel insert failed: ' . $wpdb->last_error );
+            // Self-heal: re-run schema migration in case columns are missing
+            if ( class_exists( '\\JJPWS\\Core\\Activator' ) ) {
+                \JJPWS\Core\Activator::migrate();
+                $result = $wpdb->insert( $this->table, $row );
+                if ( $result === false ) {
+                    error_log( 'JJPWS SubscriptionModel retry insert failed: ' . $wpdb->last_error );
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+
+        return $wpdb->insert_id;
     }
 
     public function find( int $id ): ?object {

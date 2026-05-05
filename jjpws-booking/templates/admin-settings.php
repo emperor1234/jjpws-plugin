@@ -240,17 +240,29 @@
 
             function renderDiag(json) {
                 if (!json.success) {
-                    return `<strong style="color:#c0392b;">Failed at ${json.data?.stage || 'unknown'} stage:</strong><br>${json.data?.message || 'Unknown error'}`;
+                    let html = `<h4 style="color:#c0392b; margin-top:0;">✗ Failed at ${json.data?.stage || 'unknown'} stage</h4>`;
+                    html += `<p>${escapeHtml(json.data?.message || 'Unknown error')}</p>`;
+                    if (json.data?.geocode) {
+                        const g = json.data.geocode;
+                        html += `<details style="margin-top:.8em;"><summary><strong>Geocoding details</strong></summary>`;
+                        html += `<p>Provider: <code>${g.provider}</code></p>`;
+                        if (g.api_status) html += `<p>API status: <code>${g.api_status}</code></p>`;
+                        if (g.http_status) html += `<p>HTTP status: <code>${g.http_status}</code></p>`;
+                        html += `<p>Request URL:<br><code style="font-size:11px;word-break:break-all;">${escapeHtml(g.request_url || '')}</code></p>`;
+                        html += `</details>`;
+                    }
+                    return html;
                 }
-                const g = json.data.geocoded;
-                const p = json.data.parcel;
-                let html = `<h4 style="margin-top:0;">Geocoding ✓</h4>`;
-                html += `<p>Lat/Lng: <code>${g.lat}, ${g.lng}</code></p>`;
+                const g  = json.data.geocoded;
+                const gd = json.data.geocode_detail || {};
+                const p  = json.data.parcel;
+                let html = `<h4 style="margin-top:0; color:#2c7a3d;">✓ Geocoding</h4>`;
+                html += `<p>Lat/Lng: <code>${g.lat}, ${g.lng}</code> (provider: <code>${gd.provider || '?'}</code>)</p>`;
                 html += `<h4>Parcel Lookup</h4>`;
                 if (p.acres !== null) {
                     html += `<p style="color:#2c7a3d;"><strong>✓ Found parcel:</strong> ${p.acres} acres (matched field: <code>${p.matched_field}</code>)</p>`;
                 } else {
-                    html += `<p style="color:#c0392b;"><strong>✗ ${p.error || 'No data returned'}</strong></p>`;
+                    html += `<p style="color:#c0392b;"><strong>✗ ${escapeHtml(p.error || 'No data returned')}</strong></p>`;
                 }
                 html += `<details style="margin-top:1em;"><summary><strong>Request URL</strong></summary><textarea readonly rows="3" style="width:100%;font-family:monospace;font-size:11px;">${escapeHtml(p.request_url || '')}</textarea></details>`;
                 if (p.attributes) {

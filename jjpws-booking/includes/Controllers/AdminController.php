@@ -233,20 +233,22 @@ class AdminController {
         }
 
         $service = new \JJPWS\Services\LotSizeService();
-        $coords  = $service->geocode_public( $street, $city, $state, $zip );
+        $geo     = $service->geocode_diagnostic( $street, $city, $state, $zip );
 
-        if ( ! $coords ) {
+        if ( $geo['lat'] === null ) {
             wp_send_json_error( [
-                'stage'   => 'geocoding',
-                'message' => 'Could not geocode the address. Check your Google Maps API key (Geocoding API must be enabled), or this address may not exist.',
+                'stage'    => 'geocoding',
+                'message'  => $geo['error_message'] ?: 'Geocoding failed for an unknown reason.',
+                'geocode'  => $geo,
             ] );
         }
 
-        $diag = $service->arcgis_lookup_diagnostic( $coords['lat'], $coords['lng'] );
+        $parcel = $service->arcgis_lookup_diagnostic( $geo['lat'], $geo['lng'] );
 
         wp_send_json_success( [
-            'geocoded'  => $coords,
-            'parcel'    => $diag,
+            'geocoded'  => [ 'lat' => $geo['lat'], 'lng' => $geo['lng'] ],
+            'geocode_detail' => $geo,
+            'parcel'    => $parcel,
         ] );
     }
 

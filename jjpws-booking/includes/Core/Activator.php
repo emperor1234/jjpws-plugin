@@ -7,9 +7,17 @@ use JJPWS\Services\PricingEngine;
 class Activator {
 
     public static function activate(): void {
+        self::migrate();
+        flush_rewrite_rules();
+    }
+
+    /**
+     * Schema + defaults only — no rewrite-rule flush. Safe to call on
+     * `plugins_loaded` for idempotent migrations after an auto-update.
+     */
+    public static function migrate(): void {
         self::create_tables();
         self::seed_defaults();
-        flush_rewrite_rules();
     }
 
     private static function create_tables(): void {

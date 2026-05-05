@@ -55,23 +55,93 @@ class LotSizeService {
         return $this->geocode( $street, $city, $state, $zip );
     }
 
-    private function geocode( string $street, string $city, string $state, string $zip ): ?array {
+    /**
+     * Like geocode() but returns full diagnostic info including the
+     * underlying Google API status / error_message.
+     */
+    public function geocode_diagnostic( string $street, string $city, string $state, string $zip ): array {
         $api_key = $this->get_google_api_key();
+        $diag    = [
+            'provider'      => $api_key ? 'google' : 'nominatim',
+            'request_url'   => null,
+            'http_status'   => null,
+            'api_status'    => null,
+            'error_message' => null,
+            'lat'           => null,
+            'lng'           => null,
+        ];
+
+        $address = urlencode( "{$street}, {$city}, {$state} {$zip}" );
 
         if ( empty( $api_key ) ) {
-            return $this->nominatim_geocode( $street, $city, $state, $zip );
+            $url = "https://nominatim.openstreetmap.org/search?q={$address},USA&format=json&limit=1";
+            $diag['request_url'] = $url;
+            $response = wp_remote_get( $url, [ 'timeout' => 8, 'user-agent' => 'JJPetWasteServices/1.0' ] );
+            if ( is_wp_error( $response ) ) {
+                $diag['error_message'] = $response->get_error_message();
+                return $diag;
+            }
+            $diag['http_status'] = (int) wp_remote_retrieve_response_code( $response );
+            $data = json_decode( wp_remote_retrieve_body( $response ), true );
+            if ( ! empty( $data[0]['lat'] ) ) {
+                $diag['lat'] = (float) $data[0]['lat'];
+                $diag['lng'] = (float) $data[0]['lon'];
+            } else {
+                $diag['error_message'] = 'Nominatim returned no results for this address.';
+            }
+            return $diag;
         }
 
-        $address  = urlencode( "{$street}, {$city}, {$state} {$zip}" );
-        $url      = "https://maps.googleapis.com/maps/api/geocode/json?address={$address}&key={$api_key}";
-        $response = $this->http_get( $url );
+        $url = "https://maps.googleapis.com/maps/api/geocode/json?address={$address}&key={$api_key}";
+        $diag['request_url'] = preg_replace( '/key=[^&]+/', 'key=***REDACTED***', $url );
 
-        if ( ! $response ) return null;
-        $data = json_decode( $response, true );
-        if ( empty( $data['results'][0]['geometry']['location'] ) ) return null;
+        $response = wp_remote_get( $url, [ 'timeout' => 8, 'user-agent' => 'JJPetWasteServices/1.0' ] );
+        if ( is_wp_error( $response ) ) {
+            $diag['error_message'] = 'HTTP error: ' . $response->get_error_message();
+            return $diag;
+        }
+
+        $diag['http_status'] = (int) wp_remote_retrieve_response_code( $response );
+        $body = wp_remote_retrieve_body( $response );
+        $data = json_decode( $body, true );
+
+        $diag['api_status'] = $data['status'] ?? 'UNKNOWN';
+
+        if ( ( $data['status'] ?? '' ) !== 'OK' ) {
+            $hint = $this->google_status_hint( $data['status'] ?? '' );
+            $diag['error_message'] = ( $data['error_message'] ?? "Google API status: {$diag['api_status']}" )
+                . ( $hint ? "  Hint: {$hint}" : '' );
+            error_log( 'JJPWS Google geocoding failed: ' . $diag['error_message'] );
+            return $diag;
+        }
+
+        if ( empty( $data['results'][0]['geometry']['location'] ) ) {
+            $diag['error_message'] = 'Google returned OK but no geometry — address may be ambiguous.';
+            return $diag;
+        }
 
         $loc = $data['results'][0]['geometry']['location'];
-        return [ 'lat' => (float) $loc['lat'], 'lng' => (float) $loc['lng'] ];
+        $diag['lat'] = (float) $loc['lat'];
+        $diag['lng'] = (float) $loc['lng'];
+
+        return $diag;
+    }
+
+    private function google_status_hint( string $status ): string {
+        return match ( $status ) {
+            'REQUEST_DENIED'   => 'Usually means the API key is invalid, the Geocoding API isn\'t enabled, or HTTP-referrer restrictions are blocking server-side calls. Server requests have NO referrer — use IP restrictions (or none) for this key, NOT HTTP-referrer restrictions.',
+            'OVER_QUERY_LIMIT' => 'You\'ve exceeded your daily quota or rate limit.',
+            'OVER_DAILY_LIMIT' => 'Billing isn\'t enabled on the Google Cloud project, or your daily quota is exhausted.',
+            'INVALID_REQUEST'  => 'The address or parameters are malformed.',
+            'ZERO_RESULTS'     => 'Google couldn\'t find this address.',
+            default            => '',
+        };
+    }
+
+    private function geocode( string $street, string $city, string $state, string $zip ): ?array {
+        $diag = $this->geocode_diagnostic( $street, $city, $state, $zip );
+        if ( $diag['lat'] === null ) return null;
+        return [ 'lat' => $diag['lat'], 'lng' => $diag['lng'] ];
     }
 
     private function nominatim_geocode( string $street, string $city, string $state, string $zip ): ?array {

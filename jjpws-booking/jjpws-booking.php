@@ -46,6 +46,19 @@ PucFactory::buildUpdateChecker(
 register_activation_hook( JJPWS_PLUGIN_FILE, [ Activator::class, 'activate' ] );
 register_deactivation_hook( JJPWS_PLUGIN_FILE, [ Deactivator::class, 'deactivate' ] );
 
+/**
+ * Run schema migrations on plugin update. WordPress's auto-updater does NOT
+ * fire the activation hook, so without this any new tables/columns/options
+ * added in a release would never reach existing installs.
+ */
+add_action( 'plugins_loaded', function () {
+    $installed = get_option( 'jjpws_db_version' );
+    if ( $installed !== JJPWS_VERSION ) {
+        Activator::migrate();
+        update_option( 'jjpws_db_version', JJPWS_VERSION );
+    }
+}, 5 );
+
 function jjpws_run(): void {
     $plugin = new Plugin();
     $plugin->run();
