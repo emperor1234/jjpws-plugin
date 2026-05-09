@@ -13,10 +13,18 @@ class AccountPage {
     public function enqueue_assets(): void {
         if ( ! $this->is_account_page() ) return;
 
+        // booking-form.css carries shared styles: buttons, modals, status badges, error boxes.
+        wp_enqueue_style(
+            'jjpws-booking',
+            JJPWS_PLUGIN_URL . 'assets/css/booking-form.css',
+            [],
+            JJPWS_VERSION
+        );
+
         wp_enqueue_style(
             'jjpws-account-page',
             JJPWS_PLUGIN_URL . 'assets/css/account-page.css',
-            [],
+            [ 'jjpws-booking' ],
             JJPWS_VERSION
         );
     }

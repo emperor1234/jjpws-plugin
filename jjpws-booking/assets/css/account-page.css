@@ -1,0 +1,308 @@
+/* ── JJ Pet Waste — My Account Page ──────────────────────────────────────── */
+
+:root {
+    --jjpws-green:       #2c7a3d;
+    --jjpws-green-dark:  #1f5c2d;
+    --jjpws-green-light: #e8f5ec;
+    --jjpws-radius:      8px;
+    --jjpws-border:      #d1d5db;
+    --jjpws-text:        #111827;
+    --jjpws-muted:       #6b7280;
+}
+
+/* ── Wrapper ─────────────────────────────────────────────────────────────── */
+.jjpws-account-wrap {
+    max-width: 780px;
+    margin: 0 auto;
+    font-family: inherit;
+    color: var(--jjpws-text);
+}
+
+/* ── Tab navigation ─────────────────────────────────────────────────────── */
+.jjpws-account-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 2px solid var(--jjpws-border);
+    margin-bottom: 28px;
+}
+
+.jjpws-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--jjpws-muted);
+    text-decoration: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    border-radius: var(--jjpws-radius) var(--jjpws-radius) 0 0;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.jjpws-tab:hover {
+    color: var(--jjpws-green);
+    text-decoration: none;
+}
+
+.jjpws-tab--active {
+    color: var(--jjpws-green);
+    border-bottom-color: var(--jjpws-green);
+    background: var(--jjpws-green-light);
+}
+
+.jjpws-badge--count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--jjpws-green);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    line-height: 1;
+}
+
+/* ── Panel ───────────────────────────────────────────────────────────────── */
+.jjpws-account-panel h2 {
+    font-size: 1.35rem;
+    margin: 0 0 20px;
+}
+
+.jjpws-account-panel h3 {
+    font-size: 1.1rem;
+    margin: 28px 0 6px;
+}
+
+/* ── Profile form ────────────────────────────────────────────────────────── */
+.jjpws-account-panel .jjpws-field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+@media (max-width: 540px) {
+    .jjpws-account-panel .jjpws-field-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.jjpws-account-panel .jjpws-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 16px;
+}
+
+.jjpws-account-panel .jjpws-field label {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--jjpws-text);
+}
+
+.jjpws-account-panel .jjpws-field input {
+    padding: 10px 12px;
+    border: 1.5px solid var(--jjpws-border);
+    border-radius: var(--jjpws-radius);
+    font-size: 1rem;
+    transition: border-color 0.15s;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.jjpws-account-panel .jjpws-field input:focus {
+    outline: none;
+    border-color: var(--jjpws-green);
+    box-shadow: 0 0 0 3px rgba(44, 122, 61, 0.12);
+}
+
+.jjpws-account-panel .jjpws-field input:disabled {
+    background: #f3f4f6;
+    color: var(--jjpws-muted);
+    cursor: not-allowed;
+}
+
+.jjpws-field-hint {
+    font-size: 0.8rem;
+    color: var(--jjpws-muted);
+    margin: 0;
+}
+
+.jjpws-divider {
+    border: none;
+    border-top: 1px solid var(--jjpws-border);
+    margin: 24px 0;
+}
+
+.jjpws-form-actions {
+    margin-top: 8px;
+}
+
+.jjpws-success-inline {
+    background: var(--jjpws-green-light);
+    color: var(--jjpws-green-dark);
+    border: 1px solid var(--jjpws-green);
+    border-radius: var(--jjpws-radius);
+    padding: 12px 16px;
+    font-weight: 600;
+    margin-bottom: 20px;
+}
+
+/* ── Subscription cards ─────────────────────────────────────────────────── */
+.jjpws-sub-card {
+    border: 1.5px solid var(--jjpws-border);
+    border-radius: var(--jjpws-radius);
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+.jjpws-sub-card--active  { border-color: var(--jjpws-green); }
+.jjpws-sub-card--past_due { border-color: #f59e0b; }
+
+.jjpws-sub-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #f9fafb;
+    border-bottom: 1px solid var(--jjpws-border);
+}
+
+.jjpws-sub-card--active  .jjpws-sub-card__header { background: var(--jjpws-green-light); }
+
+.jjpws-sub-card__meta {
+    font-size: 0.8rem;
+    color: var(--jjpws-muted);
+}
+
+.jjpws-status {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.jjpws-status--active    { background: var(--jjpws-green); color: #fff; }
+.jjpws-status--cancelled { background: #e5e7eb; color: #374151; }
+.jjpws-status--past_due  { background: #fef3c7; color: #92400e; }
+
+.jjpws-sub-card__body {
+    padding: 16px;
+}
+
+.jjpws-sub-detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 7px 0;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 0.9rem;
+}
+
+.jjpws-sub-detail-row:last-child { border-bottom: none; }
+
+.jjpws-sub-detail-row span { color: var(--jjpws-muted); flex-shrink: 0; }
+.jjpws-sub-detail-row strong { text-align: right; }
+
+.jjpws-sub-detail-row--price {
+    padding-top: 12px;
+    margin-top: 4px;
+    border-top: 2px solid var(--jjpws-border);
+    font-weight: 600;
+}
+
+.jjpws-price-highlight {
+    font-size: 1.15rem;
+    color: var(--jjpws-green-dark);
+}
+
+.jjpws-sub-card__footer {
+    padding: 12px 16px;
+    background: #fafafa;
+    border-top: 1px solid var(--jjpws-border);
+    text-align: right;
+}
+
+.jjpws-sub-card__cancelled-note {
+    padding: 10px 16px;
+    font-size: 0.85rem;
+    color: var(--jjpws-muted);
+    margin: 0;
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+.jjpws-empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--jjpws-muted);
+    font-size: 1rem;
+}
+
+.jjpws-empty-state a {
+    color: var(--jjpws-green);
+    font-weight: 600;
+    text-decoration: none;
+    margin-left: 6px;
+}
+
+/* ── Not-logged-in auth gate (used in [jjpws_my_account]) ─────────────────── */
+.jjpws-auth-gate {
+    text-align: center;
+    padding: 48px 24px;
+    border: 1.5px dashed var(--jjpws-border);
+    border-radius: var(--jjpws-radius);
+}
+
+.jjpws-auth-gate p {
+    margin-bottom: 20px;
+    color: var(--jjpws-muted);
+}
+
+.jjpws-auth-gate .jjpws-btn {
+    margin: 4px;
+}
+
+/* ── Auth gate inside booking form Step 3 ────────────────────────────────── */
+.jjpws-step3-auth-gate {
+    background: var(--jjpws-green-light);
+    border: 2px solid var(--jjpws-green);
+    border-radius: var(--jjpws-radius);
+    padding: 24px;
+    margin: 20px 0;
+    text-align: center;
+}
+
+.jjpws-step3-auth-gate h4 {
+    font-size: 1.1rem;
+    margin: 0 0 8px;
+    color: var(--jjpws-green-dark);
+}
+
+.jjpws-step3-auth-gate p {
+    color: #374151;
+    margin: 0 0 18px;
+    font-size: 0.9rem;
+}
+
+.jjpws-step3-auth-gate-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+
+.jjpws-step3-auth-note {
+    font-size: 0.8rem;
+    color: var(--jjpws-muted);
+    margin: 0;
+}

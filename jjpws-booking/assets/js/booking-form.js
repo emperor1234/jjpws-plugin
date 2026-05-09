@@ -581,6 +581,14 @@
             applyServiceTypeToggle();
             goToStep(3);
             populateReview();
+
+            // User just came back from login/registration — swap the auth gate for the checkout button
+            if (jjpwsData.isLoggedIn) {
+                const gate    = $('jjpws-auth-gate');
+                const actions = $('jjpws-checkout-actions');
+                if (gate)    gate.style.display    = 'none';
+                if (actions) actions.style.display = '';
+            }
         } catch (e) { console.error(e); }
     }
 
@@ -691,6 +699,11 @@
         $('jjpws-quote-submit')?.addEventListener('click', handleQuoteSubmit);
 
         initStepper();
+
+        // Save state before auth redirects so the form survives login/registration
+        ['jjpws-register-link', 'jjpws-login-link'].forEach(id => {
+            $(id)?.addEventListener('click', () => saveFormState());
+        });
 
         // Resume after auth
         if (jjpwsData.resumeFlow) restoreFormState();

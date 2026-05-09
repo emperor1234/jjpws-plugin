@@ -275,7 +275,38 @@
 
             <div id="jjpws-checkout-error" class="jjpws-error-msg" style="display:none;"></div>
 
-            <div class="jjpws-step-nav">
+            <?php
+            $jjpws_resume_url    = add_query_arg( 'jjpws_resume', '1', get_permalink() );
+            $jjpws_login_url     = wp_login_url( $jjpws_resume_url );
+            $jjpws_register_url  = add_query_arg( 'redirect_to', rawurlencode( $jjpws_login_url ), wp_registration_url() );
+            $jjpws_user_logged_in = is_user_logged_in();
+            ?>
+
+            <!-- Auth gate: shown to visitors who are NOT yet logged in ──── -->
+            <div id="jjpws-auth-gate" class="jjpws-step3-auth-gate"
+                 style="<?php echo $jjpws_user_logged_in ? 'display:none;' : ''; ?>">
+                <h4><?php esc_html_e( 'Create an Account to Complete Your Booking', 'jjpws-booking' ); ?></h4>
+                <p><?php esc_html_e( 'An account lets you manage your subscription, view billing history, and cancel anytime.', 'jjpws-booking' ); ?></p>
+                <div class="jjpws-step3-auth-gate-actions">
+                    <a href="<?php echo esc_url( $jjpws_register_url ); ?>"
+                       id="jjpws-register-link"
+                       class="jjpws-btn jjpws-btn--primary">
+                        <?php esc_html_e( 'Create a Free Account', 'jjpws-booking' ); ?>
+                    </a>
+                    <a href="<?php echo esc_url( $jjpws_login_url ); ?>"
+                       id="jjpws-login-link"
+                       class="jjpws-btn jjpws-btn--secondary">
+                        <?php esc_html_e( 'Already have an account? Log In', 'jjpws-booking' ); ?>
+                    </a>
+                </div>
+                <p class="jjpws-step3-auth-note">
+                    <?php esc_html_e( 'Your booking details are saved — you won\'t need to start over after signing in.', 'jjpws-booking' ); ?>
+                </p>
+            </div>
+
+            <!-- Checkout nav: shown only to logged-in users ─────────────── -->
+            <div class="jjpws-step-nav" id="jjpws-checkout-actions"
+                 style="<?php echo $jjpws_user_logged_in ? '' : 'display:none;'; ?>">
                 <button type="button" class="jjpws-btn jjpws-btn--secondary" id="jjpws-step3-back">← <?php esc_html_e( 'Back', 'jjpws-booking' ); ?></button>
                 <button type="button" class="jjpws-btn jjpws-btn--primary jjpws-btn--cta" id="jjpws-complete-booking">
                     <?php esc_html_e( 'Complete Booking', 'jjpws-booking' ); ?>
