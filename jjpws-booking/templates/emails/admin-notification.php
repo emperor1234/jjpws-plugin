@@ -6,16 +6,14 @@ $freq_labels = [
     'biweekly'     => 'Bi-Weekly',
 ];
 $lot_labels = [
-    'xs' => 'Under 3,000 sq ft',
-    'sm' => '3,000 – 6,000 sq ft',
-    'md' => '6,000 – 10,000 sq ft',
-    'lg' => '10,000 – 18,000 sq ft',
-    'xl' => '18,000+ sq ft',
+    'small'  => 'Under 0.75 acre',
+    'medium' => '0.75 – 1.5 acres',
+    'large'  => 'Over 1.5 acres',
 ];
-$price_fmt  = '$' . number_format( ( $monthly_price_cents ?? 0 ) / 100, 2 );
-$freq_label = $freq_labels[ $frequency ?? '' ] ?? ( $frequency ?? '' );
-$lot_label  = $lot_labels[ $lot_size_category ?? '' ] ?? ( $lot_size_category ?? '' );
-$cust       = $customer ?? null;
+$price_fmt  = '$' . number_format( ( $jjpws_total_price_cents ?? 0 ) / 100, 2 );
+$freq_label = $freq_labels[ $jjpws_frequency ?? '' ] ?? ( $jjpws_frequency ?? '' );
+$lot_label  = $lot_labels[ $jjpws_acreage_tier ?? '' ] ?? ( $jjpws_acreage_tier ?? '' );
+$cust       = $jjpws_customer ?? null;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -33,11 +31,11 @@ $cust       = $customer ?? null;
             <tr><td><strong>Email</strong></td>
                 <td><?php echo esc_html( $cust ? $cust->user_email : '—' ); ?></td></tr>
             <tr style="background:#f9f9f9;"><td><strong>Service Address</strong></td>
-                <td><?php echo esc_html( "{$street_address}, {$city}, {$state} {$zip_code}" ); ?></td></tr>
+                <td><?php echo esc_html( "{$jjpws_street_address}, {$jjpws_city}, {$jjpws_state} {$jjpws_zip_code}" ); ?></td></tr>
             <tr><td><strong>Lot Size</strong></td>
                 <td><?php echo esc_html( $lot_label ); ?></td></tr>
             <tr style="background:#f9f9f9;"><td><strong>Dogs</strong></td>
-                <td><?php echo absint( $dog_count ?? 0 ); ?></td></tr>
+                <td><?php echo absint( $jjpws_dog_count ?? 0 ); ?></td></tr>
             <tr><td><strong>Frequency</strong></td>
                 <td><?php echo esc_html( $freq_label ); ?></td></tr>
             <tr style="background:#f9f9f9;"><td><strong>Monthly Revenue</strong></td>

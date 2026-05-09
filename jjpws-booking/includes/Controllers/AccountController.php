@@ -8,6 +8,54 @@ use JJPWS\Services\EmailService;
 
 class AccountController {
 
+    public function update_profile(): void {
+        check_ajax_referer( 'jjpws_nonce', 'nonce' );
+
+        if ( ! is_user_logged_in() ) {
+            wp_send_json_error( [ 'code' => 'UNAUTHENTICATED', 'message' => 'Please log in.' ], 401 );
+        }
+
+        $user_id = get_current_user_id();
+
+        $first_name    = sanitize_text_field( $_POST['first_name'] ?? '' );
+        $last_name     = sanitize_text_field( $_POST['last_name'] ?? '' );
+        $display_name  = sanitize_text_field( $_POST['display_name'] ?? '' );
+        $billing_phone = sanitize_text_field( $_POST['billing_phone'] ?? '' );
+        $password      = $_POST['password'] ?? '';
+
+        $user_data = [
+            'ID' => $user_id,
+        ];
+
+        if ( ! empty( $first_name ) ) {
+            $user_data['first_name'] = $first_name;
+        }
+        if ( ! empty( $last_name ) ) {
+            $user_data['last_name'] = $last_name;
+        }
+        if ( ! empty( $display_name ) ) {
+            $user_data['display_name'] = $display_name;
+        }
+
+        if ( ! empty( $billing_phone ) ) {
+            update_user_meta( $user_id, 'billing_phone', $billing_phone );
+        }
+
+        if ( ! empty( $password ) ) {
+            $user_data['user_pass'] = $password;
+        }
+
+        if ( count( $user_data ) > 1 ) {
+            $result = wp_update_user( $user_data );
+            if ( is_wp_error( $result ) ) {
+                error_log( 'JJPWS update_profile error: ' . $result->get_error_message() );
+                wp_send_json_error( [ 'code' => 'UPDATE_FAILED', 'message' => 'Failed to update profile.' ] );
+            }
+        }
+
+        wp_send_json_success( [ 'message' => 'Profile updated successfully.' ] );
+    }
+
     public function cancel_subscription(): void {
         check_ajax_referer( 'jjpws_nonce', 'nonce' );
 

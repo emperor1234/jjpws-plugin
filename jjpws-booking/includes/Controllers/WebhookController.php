@@ -92,6 +92,16 @@ class WebhookController {
 
         $service_type = $meta->service_type ?? PricingEngine::SERVICE_RECURRING;
 
+        // Calculate base price from total minus surcharges
+        $total_price_cents       = absint( $meta->total_price_cents ?? 0 );
+        $distance_fee_cents      = absint( $meta->distance_fee_cents ?? 0 );
+        $neglect_surcharge_cents = absint( $meta->neglect_surcharge_cents ?? 0 );
+        $annual_discount_cents   = absint( $meta->annual_discount_cents ?? 0 );
+        // Estimate acreage premium as 5% of base if medium tier
+        $acreage_tier            = $meta->acreage_tier ?? 'small';
+        $acreage_premium_cents   = ( $acreage_tier === 'medium' ) ? (int) round( $total_price_cents * 0.05 ) : 0;
+        $base_price_cents        = max( 0, $total_price_cents - $distance_fee_cents - $neglect_surcharge_cents + $annual_discount_cents - $acreage_premium_cents );
+
         $base = [
             'user_id'                  => (int) $meta->wp_user_id,
             'service_type'             => $service_type,
@@ -111,11 +121,13 @@ class WebhookController {
             'frequency'                => $meta->frequency          ?? '',
             'time_since_cleaned'       => $meta->time_since_cleaned ?? 'recent',
             'annual_prepay'            => ! empty( $meta->annual_prepay ) && $meta->annual_prepay !== '0',
-            'distance_fee_cents'       => absint( $meta->distance_fee_cents      ?? 0 ),
-            'neglect_surcharge_cents'  => absint( $meta->neglect_surcharge_cents ?? 0 ),
-            'annual_discount_cents'    => absint( $meta->annual_discount_cents   ?? 0 ),
+            'base_price_cents'         => $base_price_cents,
+            'acreage_premium_cents'    => $acreage_premium_cents,
+            'distance_fee_cents'       => $distance_fee_cents,
+            'neglect_surcharge_cents'  => $neglect_surcharge_cents,
+            'annual_discount_cents'    => $annual_discount_cents,
             'recurring_monthly_cents'  => absint( $meta->recurring_monthly_cents ?? 0 ),
-            'total_price_cents'        => absint( $meta->total_price_cents       ?? 0 ),
+            'total_price_cents'        => $total_price_cents,
         ];
 
         if ( $service_type === PricingEngine::SERVICE_ONE_TIME ) {

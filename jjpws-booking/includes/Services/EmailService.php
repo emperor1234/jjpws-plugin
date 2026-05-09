@@ -67,7 +67,12 @@ class EmailService {
             return '';
         }
 
-        extract( $data, EXTR_SKIP );
+        // Prefix all data keys to prevent variable collisions
+        $prefixed_data = [];
+        foreach ( $data as $key => $value ) {
+            $prefixed_data[ 'jjpws_' . $key ] = $value;
+        }
+        extract( $prefixed_data, EXTR_SKIP );
         ob_start();
         include $path;
         return ob_get_clean();

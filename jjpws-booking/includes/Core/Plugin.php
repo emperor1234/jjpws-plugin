@@ -10,6 +10,7 @@ use JJPWS\Controllers\AccountController;
 use JJPWS\Controllers\QuoteController;
 use JJPWS\Frontend\BookingForm;
 use JJPWS\Frontend\AccountTab;
+use JJPWS\Frontend\AccountPage;
 
 class Plugin {
 
@@ -47,6 +48,10 @@ class Plugin {
         $this->loader->add_action( 'init', $tab, 'register_endpoint' );
         $this->loader->add_filter( 'query_vars', $tab, 'add_query_var', 0 );
         $this->loader->add_action( 'template_redirect', $tab, 'handle_redirect' );
+
+        $account_page = new AccountPage();
+        $this->loader->add_action( 'init', $account_page, 'register_shortcode' );
+        $this->loader->add_action( 'wp_enqueue_scripts', $account_page, 'enqueue_assets' );
     }
 
     private function define_ajax_hooks(): void {
@@ -68,6 +73,7 @@ class Plugin {
         // Login required
         add_action( 'wp_ajax_jjpws_create_checkout_session', [ $checkout, 'create_session' ] );
         add_action( 'wp_ajax_jjpws_cancel_subscription',     [ $account,  'cancel_subscription' ] );
+        add_action( 'wp_ajax_jjpws_update_profile',          [ $account,  'update_profile' ] );
     }
 
     private function define_rest_hooks(): void {

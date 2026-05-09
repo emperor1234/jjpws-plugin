@@ -17,17 +17,16 @@
                 'biweekly'     => 'Bi-Weekly',
             ];
             $lot_labels = [
-                'xs' => 'Under 3,000 sq ft',
-                'sm' => '3,000 – 6,000 sq ft',
-                'md' => '6,000 – 10,000 sq ft',
-                'lg' => '10,000 – 18,000 sq ft',
-                'xl' => '18,000+ sq ft',
+                'small'  => 'Under 0.75 acre',
+                'medium' => '0.75 – 1.5 acres',
+                'large'  => 'Over 1.5 acres',
             ];
             $freq_label = $freq_labels[ $sub->frequency ] ?? $sub->frequency;
-            $lot_label  = $lot_labels[ $sub->lot_size_category ] ?? $sub->lot_size_category;
-            $price_fmt  = '$' . number_format( $sub->monthly_price_cents / 100, 2 );
+            $lot_label  = $lot_labels[ $sub->acreage_tier ] ?? $sub->acreage_tier;
+            $price_fmt  = '$' . number_format( $sub->total_price_cents / 100, 2 );
             $period_end = $sub->current_period_end ? date( 'F j, Y', strtotime( $sub->current_period_end ) ) : '—';
             $is_active  = $sub->status === 'active';
+            $is_recurring = $sub->service_type !== 'one_time';
         ?>
         <div class="jjpws-sub-card jjpws-sub-card--<?php echo esc_attr( $sub->status ); ?>">
             <div class="jjpws-sub-card__header">
@@ -35,6 +34,8 @@
                     <?php echo esc_html( ucfirst( str_replace( '_', ' ', $sub->status ) ) ); ?>
                 </span>
                 <span class="jjpws-sub-card__date">
+                    <?php echo esc_html( $sub->service_type === 'one_time' ? 'One-Time Cleanup' : 'Recurring Service' ); ?>
+                    &bull;
                     <?php esc_html_e( 'Started', 'jjpws-booking' ); ?>
                     <?php echo esc_html( date( 'F j, Y', strtotime( $sub->created_at ) ) ); ?>
                 </span>
@@ -45,10 +46,18 @@
                     <span><?php esc_html_e( 'Address', 'jjpws-booking' ); ?></span>
                     <strong><?php echo esc_html( "{$sub->street_address}, {$sub->city}, {$sub->state} {$sub->zip_code}" ); ?></strong>
                 </div>
+                <?php if ( $sub->lot_size_acres ) : ?>
+                <div class="jjpws-sub-detail-row">
+                    <span><?php esc_html_e( 'Lot Size', 'jjpws-booking' ); ?></span>
+                    <strong><?php echo esc_html( $lot_label . ' (' . number_format( (float) $sub->lot_size_acres, 2 ) . ' acres)' ); ?></strong>
+                </div>
+                <?php else : ?>
                 <div class="jjpws-sub-detail-row">
                     <span><?php esc_html_e( 'Lot Size', 'jjpws-booking' ); ?></span>
                     <strong><?php echo esc_html( $lot_label ); ?></strong>
                 </div>
+                <?php endif; ?>
+                <?php if ( $is_recurring ) : ?>
                 <div class="jjpws-sub-detail-row">
                     <span><?php esc_html_e( 'Dogs', 'jjpws-booking' ); ?></span>
                     <strong><?php echo esc_html( $sub->dog_count ); ?></strong>
@@ -57,11 +66,12 @@
                     <span><?php esc_html_e( 'Frequency', 'jjpws-booking' ); ?></span>
                     <strong><?php echo esc_html( $freq_label ); ?></strong>
                 </div>
+                <?php endif; ?>
                 <div class="jjpws-sub-detail-row">
-                    <span><?php esc_html_e( 'Monthly Cost', 'jjpws-booking' ); ?></span>
+                    <span><?php echo esc_html( $sub->annual_prepay ? __( 'Annual Total', 'jjpws-booking' ) : ( $is_recurring ? __( 'Monthly Cost', 'jjpws-booking' ) : __( 'Total Paid', 'jjpws-booking' ) ) ); ?></span>
                     <strong><?php echo esc_html( $price_fmt ); ?></strong>
                 </div>
-                <?php if ( $is_active && $sub->current_period_end ) : ?>
+                <?php if ( $is_active && $is_recurring && $sub->current_period_end ) : ?>
                 <div class="jjpws-sub-detail-row">
                     <span><?php esc_html_e( 'Next Billing Date', 'jjpws-booking' ); ?></span>
                     <strong><?php echo esc_html( $period_end ); ?></strong>
@@ -69,7 +79,7 @@
                 <?php endif; ?>
             </div>
 
-            <?php if ( $is_active ) : ?>
+            <?php if ( $is_active && $is_recurring ) : ?>
             <div class="jjpws-sub-card__footer">
                 <button type="button"
                         class="jjpws-btn jjpws-btn--danger jjpws-cancel-sub-btn"

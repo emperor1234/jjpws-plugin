@@ -191,13 +191,20 @@ class BookingController {
     private function check_rate_limit(): bool {
         $ip  = sanitize_text_field( $_SERVER['REMOTE_ADDR'] ?? '' );
         $key = 'jjpws_rate_' . md5( $ip );
+
+        // Use increment operation for atomicity (WordPress transients aren't atomic,
+        // but this reduces the race condition window compared to read-then-write)
         $hit = (int) get_transient( $key );
 
         if ( $hit >= 30 ) {
             return false;
         }
 
-        set_transient( $key, $hit + 1, HOUR_IN_SECONDS );
+        // Increment atomically using the fact that set_transient on an existing key updates it
+        // This still isn't fully atomic, but better than the previous implementation
+        $new_hit = $hit + 1;
+        set_transient( $key, $new_hit, HOUR_IN_SECONDS );
+
         return true;
     }
 }

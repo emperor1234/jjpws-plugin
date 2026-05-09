@@ -1,9 +1,9 @@
 <?php if ( ! defined( 'ABSPATH' ) ) exit;
 $site_name  = get_bloginfo( 'name' );
-$user       = get_userdata( $user_id ?? 0 );
+$user       = get_userdata( $jjpws_user_id ?? 0 );
 $first_name = $user ? $user->first_name ?: $user->display_name : 'there';
-$period_end = isset( $current_period_end ) && $current_period_end
-    ? date( 'F j, Y', strtotime( $current_period_end ) )
+$period_end = isset( $jjpws_current_period_end ) && $jjpws_current_period_end
+    ? date( 'F j, Y', strtotime( $jjpws_current_period_end ) )
     : 'the end of your current billing period';
 ?>
 <!DOCTYPE html>

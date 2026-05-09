@@ -140,8 +140,20 @@ class LotSizeService {
 
     private function geocode( string $street, string $city, string $state, string $zip ): ?array {
         $diag = $this->geocode_diagnostic( $street, $city, $state, $zip );
-        if ( $diag['lat'] === null ) return null;
-        return [ 'lat' => $diag['lat'], 'lng' => $diag['lng'] ];
+
+        if ( $diag['lat'] !== null ) {
+            return [ 'lat' => $diag['lat'], 'lng' => $diag['lng'] ];
+        }
+
+        // If a Google API key is configured but the request failed (e.g. HTTP-referrer
+        // restrictions blocking server-side calls), fall back to Nominatim so the
+        // parcel lookup can still proceed.
+        if ( ! empty( $this->get_google_api_key() ) ) {
+            error_log( 'JJPWS geocode: Google failed (' . ( $diag['error_message'] ?? 'unknown' ) . '), retrying with Nominatim.' );
+            return $this->nominatim_geocode( $street, $city, $state, $zip );
+        }
+
+        return null;
     }
 
     private function nominatim_geocode( string $street, string $city, string $state, string $zip ): ?array {
