@@ -280,17 +280,16 @@
             $jjpws_login_url      = wp_login_url( $jjpws_resume_url );
             $jjpws_user_logged_in = is_user_logged_in();
 
-            // Prefer WooCommerce My Account page for registration — it logs the user in
-            // immediately (no email confirmation), so the WooCommerce redirect filter can
-            // send them straight back to the booking page.
             if ( function_exists( 'wc_get_page_permalink' ) ) {
-                $wc_account_url      = wc_get_page_permalink( 'myaccount' );
-                $jjpws_register_url  = $wc_account_url
+                $wc_account_url     = wc_get_page_permalink( 'myaccount' );
+                $jjpws_register_url = $wc_account_url
                     ? add_query_arg( 'jjpws_resume', '1', $wc_account_url )
                     : $jjpws_login_url;
             } else {
-                // Fall back to standard WP login (user can click the register link there).
-                $jjpws_register_url = $jjpws_login_url;
+                // Native WP registration page — jjpws_resume flag carried as GET param so
+                // Plugin::add_resume_to_register_form() can inject it as a hidden POST field,
+                // allowing Plugin::auto_login_after_jjpws_registration() to redirect back here.
+                $jjpws_register_url = add_query_arg( 'jjpws_resume', '1', wp_registration_url() );
             }
             ?>
 

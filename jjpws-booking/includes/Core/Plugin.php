@@ -46,7 +46,11 @@ class Plugin {
         // Auth redirect: after WP login, honour jjpws_resume redirect_to
         add_filter( 'login_redirect', [ $this, 'login_redirect_filter' ], 20, 3 );
 
-        // Auth redirect: after WooCommerce registration/login
+        // Native WP registration: inject hidden field + auto-login on submit
+        add_action( 'register_form',  [ $this, 'add_resume_to_register_form' ] );
+        add_action( 'user_register',  [ $this, 'auto_login_after_jjpws_registration' ] );
+
+        // WooCommerce auth redirect (no-op if WooCommerce not active)
         add_filter( 'woocommerce_registration_redirect', [ $this, 'wc_registration_redirect' ], 20 );
         add_filter( 'woocommerce_login_redirect',        [ $this, 'wc_login_redirect' ], 20, 2 );
 
@@ -132,6 +136,29 @@ class Plugin {
         return $redirect;
     }
 
+    /**
+     * Inject a hidden jjpws_resume field into the native WP registration form so
+     * the flag survives the POST submission (GET params are not carried through).
+     */
+    public function add_resume_to_register_form(): void {
+        if ( ! empty( $_GET['jjpws_resume'] ) ) {
+            echo '<input type="hidden" name="jjpws_resume" value="1" />';
+        }
+    }
+
+    /**
+     * After native WP registration, immediately log the user in and redirect back
+     * to the booking page — skipping the "check your email" interstitial.
+     * Only fires when the registration originated from the booking form.
+     */
+    public function auto_login_after_jjpws_registration( int $user_id ): void {
+        if ( ! empty( $_POST['jjpws_resume'] ) ) {
+            wp_set_auth_cookie( $user_id, false );
+            wp_safe_redirect( $this->get_booking_page_url() . '?jjpws_resume=1' );
+            exit;
+        }
+    }
+
     private function get_booking_page_url(): string {
         $page = get_page_by_path( 'book' );
         if ( $page ) {
@@ -149,38 +176,123 @@ class Plugin {
 
     public function brand_login_page(): void {
         $brand_color = sanitize_hex_color( get_option( 'jjpws_primary_color', '#2c7a3d' ) ) ?: '#2c7a3d';
+        $site_name   = get_bloginfo( 'name' );
         $logo_url    = get_option( 'site_icon' )
             ? wp_get_attachment_image_url( (int) get_option( 'site_icon' ), 'full' )
             : '';
         ?>
         <style>
-        body.login { background: #f4f7f4; }
+        /* ── Page ── */
+        body.login {
+            background: #f0f4f1;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        #login { padding-top: 5vh; }
+
+        /* ── Logo / site name ── */
         body.login #login h1 a {
-            <?php if ( $logo_url ) : ?>
-            background-image: url('<?php echo esc_url( $logo_url ); ?>');
+            background-image: <?php echo $logo_url ? "url('" . esc_url( $logo_url ) . "')" : 'none'; ?>;
             background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
             width: 100%;
-            height: 80px;
-            <?php endif; ?>
+            height: <?php echo $logo_url ? '72px' : '0'; ?>;
+            margin-bottom: <?php echo $logo_url ? '8px' : '0'; ?>;
         }
+
+        /* ── Site name heading (shown when no logo) ── */
+        <?php if ( ! $logo_url ) : ?>
+        body.login #login h1::after {
+            content: '<?php echo esc_js( $site_name ); ?>';
+            display: block;
+            text-align: center;
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: <?php echo esc_attr( $brand_color ); ?>;
+            margin-bottom: 4px;
+            font-family: inherit;
+        }
+        <?php endif; ?>
+
+        /* ── Form card ── */
         body.login #loginform,
-        body.login #lostpasswordform,
-        body.login #registerform {
+        body.login #registerform,
+        body.login #lostpasswordform {
+            border: none;
             border-top: 4px solid <?php echo esc_attr( $brand_color ); ?>;
-            border-radius: 0 0 8px 8px;
-            box-shadow: 0 4px 24px rgba(0,0,0,.10);
+            border-radius: 0 0 14px 14px;
+            box-shadow: 0 8px 36px rgba(0,0,0,.13);
+            padding: 28px 32px 24px;
+            background: #fff;
         }
+
+        /* ── Inputs ── */
+        body.login input[type="text"],
+        body.login input[type="password"],
+        body.login input[type="email"] {
+            border: 1.5px solid #d0d7de !important;
+            border-radius: 8px !important;
+            padding: 10px 14px !important;
+            font-size: 15px !important;
+            color: #1a1a1a !important;
+            box-shadow: none !important;
+            transition: border-color .18s, box-shadow .18s;
+            box-sizing: border-box;
+        }
+        body.login input[type="text"]:focus,
+        body.login input[type="password"]:focus,
+        body.login input[type="email"]:focus {
+            border-color: <?php echo esc_attr( $brand_color ); ?> !important;
+            box-shadow: 0 0 0 3px <?php echo esc_attr( $brand_color ); ?>22 !important;
+            outline: none !important;
+        }
+
+        /* ── Labels ── */
+        body.login label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        /* ── Submit button ── */
         body.login .button-primary {
             background: <?php echo esc_attr( $brand_color ); ?> !important;
             border-color: <?php echo esc_attr( $brand_color ); ?> !important;
+            border-radius: 8px !important;
             box-shadow: none !important;
             text-shadow: none !important;
+            font-size: 15px !important;
+            font-weight: 600 !important;
+            height: auto !important;
+            padding: 10px 20px !important;
+            width: 100%;
+            transition: opacity .18s;
         }
-        body.login .button-primary:hover {
-            opacity: .88;
+        body.login .button-primary:hover { opacity: .88; }
+
+        /* ── Links ── */
+        body.login #nav a,
+        body.login #backtoblog a {
+            color: <?php echo esc_attr( $brand_color ); ?>;
+            text-decoration: none;
         }
-        body.login #backtoblog a,
-        body.login #nav a { color: <?php echo esc_attr( $brand_color ); ?>; }
+        body.login #nav a:hover,
+        body.login #backtoblog a:hover { text-decoration: underline; }
+
+        body.login #nav,
+        body.login #backtoblog {
+            text-align: center;
+            padding: 8px 0 0;
+        }
+
+        /* ── "Back to site" bar ── */
+        body.login #backtoblog {
+            background: #fff;
+            border-radius: 14px;
+            margin-top: 6px;
+            padding: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.07);
+        }
         </style>
         <?php
     }
