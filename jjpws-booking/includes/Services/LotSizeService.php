@@ -139,21 +139,69 @@ class LotSizeService {
     }
 
     private function geocode( string $street, string $city, string $state, string $zip ): ?array {
-        $diag = $this->geocode_diagnostic( $street, $city, $state, $zip );
+        $google_key = $this->get_google_api_key();
+        $arcgis_key = $this->get_arcgis_developer_key();
 
-        if ( $diag['lat'] !== null ) {
-            return [ 'lat' => $diag['lat'], 'lng' => $diag['lng'] ];
+        // 1. Google Maps (geocode_diagnostic handles the full Google call + captures
+        //    detailed status for the admin diagnostic tool).
+        if ( ! empty( $google_key ) ) {
+            $diag = $this->geocode_diagnostic( $street, $city, $state, $zip );
+            if ( $diag['lat'] !== null ) {
+                return [ 'lat' => $diag['lat'], 'lng' => $diag['lng'] ];
+            }
+            error_log( 'JJPWS geocode: Google failed (' . ( $diag['error_message'] ?? 'unknown' ) . '), trying next provider.' );
         }
 
-        // If a Google API key is configured but the request failed (e.g. HTTP-referrer
-        // restrictions blocking server-side calls), fall back to Nominatim so the
-        // parcel lookup can still proceed.
-        if ( ! empty( $this->get_google_api_key() ) ) {
-            error_log( 'JJPWS geocode: Google failed (' . ( $diag['error_message'] ?? 'unknown' ) . '), retrying with Nominatim.' );
-            return $this->nominatim_geocode( $street, $city, $state, $zip );
+        // 2. ArcGIS World Geocoder (if developer key configured).
+        if ( ! empty( $arcgis_key ) ) {
+            $result = $this->arcgis_geocode( $street, $city, $state, $zip, $arcgis_key );
+            if ( $result ) {
+                return $result;
+            }
+            error_log( 'JJPWS geocode: ArcGIS World Geocoder failed, falling back to Nominatim.' );
         }
 
-        return null;
+        // 3. Nominatim (OpenStreetMap) — always last resort.
+        return $this->nominatim_geocode( $street, $city, $state, $zip );
+    }
+
+    /**
+     * Geocode via ArcGIS World Geocoding Service using a Developer API key.
+     * Returns ['lat' => float, 'lng' => float] or null on failure.
+     */
+    private function arcgis_geocode( string $street, string $city, string $state, string $zip, string $api_key ): ?array {
+        $single_line = urlencode( "{$street}, {$city}, {$state} {$zip}" );
+        $url         = 'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates'
+                     . '?SingleLine=' . $single_line
+                     . '&f=json&maxLocations=1&outFields=Match_addr'
+                     . '&token=' . urlencode( $api_key );
+
+        $response = wp_remote_get( $url, [
+            'timeout'    => 10,
+            'user-agent' => 'JJPetWasteServices/1.0',
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            error_log( 'JJPWS ArcGIS geocode HTTP error: ' . $response->get_error_message() );
+            return null;
+        }
+
+        $code = (int) wp_remote_retrieve_response_code( $response );
+        if ( $code !== 200 ) {
+            error_log( "JJPWS ArcGIS geocode HTTP {$code}" );
+            return null;
+        }
+
+        $data = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( empty( $data['candidates'][0]['location'] ) ) {
+            error_log( 'JJPWS ArcGIS geocode: no candidates returned.' );
+            return null;
+        }
+
+        // ArcGIS returns x = longitude, y = latitude
+        $loc = $data['candidates'][0]['location'];
+        return [ 'lat' => (float) $loc['y'], 'lng' => (float) $loc['x'] ];
     }
 
     private function nominatim_geocode( string $street, string $city, string $state, string $zip ): ?array {
@@ -340,6 +388,12 @@ class LotSizeService {
         $keys = get_option( 'jjpws_api_keys', [] );
         if ( is_string( $keys ) ) $keys = maybe_unserialize( $keys );
         return is_array( $keys ) ? ( $keys['google_maps'] ?? '' ) : '';
+    }
+
+    private function get_arcgis_developer_key(): string {
+        $keys = get_option( 'jjpws_api_keys', [] );
+        if ( is_string( $keys ) ) $keys = maybe_unserialize( $keys );
+        return is_array( $keys ) ? ( $keys['arcgis_developer_key'] ?? '' ) : '';
     }
 
     private function get_arcgis_endpoint(): string {

@@ -171,6 +171,7 @@ class AdminController {
             'google_maps',
             'stripe_test_secret',
             'stripe_live_secret',
+            'arcgis_developer_key',
         ];
 
         foreach ( $key_fields as $f ) {

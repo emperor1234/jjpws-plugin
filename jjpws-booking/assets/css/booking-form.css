@@ -285,15 +285,7 @@
 }
 
 .jjpws-lot-manual {
-    margin: .75rem 0;
-}
-
-.jjpws-lot-manual select {
-    width: 100%;
-    padding: .65rem .85rem;
-    border: 1.5px solid var(--jjpws-border);
-    border-radius: var(--jjpws-radius);
-    font-size: 15px;
+    margin: .75rem 0 0;
 }
 
 .jjpws-tooltip {

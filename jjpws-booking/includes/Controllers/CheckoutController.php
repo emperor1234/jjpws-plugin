@@ -117,7 +117,7 @@ class CheckoutController {
         // ── Build Stripe checkout ─────────────────────────────────────────────
         try {
             $stripe       = new StripeService();
-            $book_url     = get_permalink( get_page_by_path( 'book' ) ) ?: home_url( '/book' );
+            $book_url     = $this->resolve_book_url();
             $address_meta = compact( 'street', 'city', 'state', 'zip', 'lat', 'lng', 'sqft', 'acres', 'miles' );
 
             $checkout_url = $stripe->create_checkout_session(
@@ -139,5 +139,23 @@ class CheckoutController {
             error_log( 'JJPWS Stripe checkout error: ' . $e->getMessage() );
             wp_send_json_error( [ 'code' => 'STRIPE_ERROR', 'message' => 'Payment setup failed. Please try again or contact support.' ] );
         }
+    }
+
+    private function resolve_book_url(): string {
+        foreach ( [ 'book', 'booking', 'book-now', 'schedule' ] as $slug ) {
+            $page = get_page_by_path( $slug );
+            if ( $page ) {
+                return get_permalink( $page );
+            }
+        }
+        // Last resort: fall back to the page that has the booking shortcode on it
+        global $wpdb;
+        $post_id = $wpdb->get_var(
+            "SELECT ID FROM {$wpdb->posts} WHERE post_status = 'publish' AND post_content LIKE '%jjpws_booking_form%' LIMIT 1"
+        );
+        if ( $post_id ) {
+            return get_permalink( (int) $post_id );
+        }
+        return home_url( '/book/' );
     }
 }

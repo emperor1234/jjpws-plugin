@@ -43,34 +43,35 @@ class StripeService {
             $customer = Customer::create( [
                 'email'    => $user->user_email,
                 'name'     => $user->display_name,
-                'metadata' => [ 'wp_user_id' => $user_id ],
+                'metadata' => [ 'wp_user_id' => (string) $user_id ],
             ] );
             $stripe_cust_id = $customer->id;
             update_user_meta( $user_id, 'jjpws_stripe_customer_id', $stripe_cust_id );
         }
 
+        // Stripe metadata values must be strings (max 500 chars per value).
         $metadata = [
-            'wp_user_id'              => $user_id,
-            'service_type'            => $service_type,
-            'street_address'          => $address['street'] ?? '',
-            'city'                    => $address['city']   ?? '',
-            'state'                   => $address['state']  ?? '',
-            'zip_code'                => $address['zip']    ?? '',
-            'lat'                     => $address['lat']    ?? '',
-            'lng'                     => $address['lng']    ?? '',
-            'lot_size_sqft'           => $address['sqft']   ?? '',
-            'lot_size_acres'          => $address['acres']  ?? '',
-            'distance_miles'          => $address['miles']  ?? 0,
-            'acreage_tier'            => $acreage_tier,
-            'dog_count'               => $dog_count,
-            'frequency'               => $frequency,
-            'time_since_cleaned'      => $time_since_cleaned,
+            'wp_user_id'              => (string) $user_id,
+            'service_type'            => (string) $service_type,
+            'street_address'          => (string) ( $address['street'] ?? '' ),
+            'city'                    => (string) ( $address['city']   ?? '' ),
+            'state'                   => (string) ( $address['state']  ?? '' ),
+            'zip_code'                => (string) ( $address['zip']    ?? '' ),
+            'lat'                     => (string) ( $address['lat']    ?? '' ),
+            'lng'                     => (string) ( $address['lng']    ?? '' ),
+            'lot_size_sqft'           => (string) ( $address['sqft']   ?? '' ),
+            'lot_size_acres'          => (string) ( $address['acres']  ?? '' ),
+            'distance_miles'          => (string) ( $address['miles']  ?? 0 ),
+            'acreage_tier'            => (string) $acreage_tier,
+            'dog_count'               => (string) $dog_count,
+            'frequency'               => (string) $frequency,
+            'time_since_cleaned'      => (string) $time_since_cleaned,
             'annual_prepay'           => $annual_prepay ? '1' : '0',
-            'total_price_cents'       => $breakdown['total_cents'] ?? 0,
-            'recurring_monthly_cents' => $breakdown['recurring_monthly_cents'] ?? 0,
-            'distance_fee_cents'      => $breakdown['distance_fee_monthly'] ?? ( $breakdown['distance_fee_cents'] ?? 0 ),
-            'neglect_surcharge_cents' => $breakdown['neglect_surcharge_cents'] ?? 0,
-            'annual_discount_cents'   => $breakdown['annual_savings_cents'] ?? 0,
+            'total_price_cents'       => (string) ( $breakdown['total_cents'] ?? 0 ),
+            'recurring_monthly_cents' => (string) ( $breakdown['recurring_monthly_cents'] ?? 0 ),
+            'distance_fee_cents'      => (string) ( $breakdown['distance_fee_monthly'] ?? ( $breakdown['distance_fee_cents'] ?? 0 ) ),
+            'neglect_surcharge_cents' => (string) ( $breakdown['neglect_surcharge_cents'] ?? 0 ),
+            'annual_discount_cents'   => (string) ( $breakdown['annual_savings_cents'] ?? 0 ),
         ];
 
         if ( $service_type === PricingEngine::SERVICE_ONE_TIME ) {
@@ -112,23 +113,26 @@ class StripeService {
     }
 
     private function create_monthly_session( string $cust_id, array $breakdown, array $metadata, string $return_url ): string {
-        $monthly = (int) $breakdown['recurring_monthly_cents'];
+        $monthly   = (int) $breakdown['recurring_monthly_cents'];
         $surcharge = (int) ( $breakdown['neglect_surcharge_cents'] ?? 0 );
 
-        $line_items = [ [
-            'quantity'   => 1,
-            'price_data' => [
-                'currency'     => 'usd',
-                'unit_amount'  => $monthly,
-                'recurring'    => [ 'interval' => 'month' ],
-                'product_data' => [ 'name' => 'JJ Pet Waste — Monthly Service' ],
-            ],
-        ] ];
-
+        // Build line items. A first-month neglect surcharge is split into two
+        // recurring items: the base subscription + a one-time invoice item.
+        // We use subscription_data.add_invoice_items (supported in all Stripe
+        // subscription checkout versions) rather than mixing billing modes in
+        // line_items, which requires explicit Stripe account feature enablement.
         $session_args = [
             'customer'    => $cust_id,
             'mode'        => 'subscription',
-            'line_items'  => $line_items,
+            'line_items'  => [ [
+                'quantity'   => 1,
+                'price_data' => [
+                    'currency'     => 'usd',
+                    'unit_amount'  => $monthly,
+                    'recurring'    => [ 'interval' => 'month' ],
+                    'product_data' => [ 'name' => 'JJ Pet Waste — Monthly Service' ],
+                ],
+            ] ],
             'success_url' => $return_url . '?booking=success&session_id={CHECKOUT_SESSION_ID}',
             'cancel_url'  => $return_url . '?booking=cancelled',
             'metadata'    => $metadata,
@@ -137,16 +141,16 @@ class StripeService {
             ],
         ];
 
-        // First-month neglect surcharge as one-time line item
+        // First-month neglect surcharge: attach as an invoice item on the
+        // initial subscription invoice via subscription_data.add_invoice_items.
         if ( $surcharge > 0 ) {
-            $session_args['line_items'][] = [
-                'quantity'   => 1,
+            $session_args['subscription_data']['add_invoice_items'] = [ [
                 'price_data' => [
                     'currency'     => 'usd',
                     'unit_amount'  => $surcharge,
                     'product_data' => [ 'name' => 'First-time cleanup surcharge' ],
                 ],
-            ];
+            ] ];
         }
 
         return Session::create( $session_args )->url;
@@ -156,20 +160,18 @@ class StripeService {
         $annual_total = (int) $breakdown['annual_total_cents'];
         $surcharge    = (int) ( $breakdown['neglect_surcharge_cents'] ?? 0 );
 
-        $line_items = [ [
-            'quantity'   => 1,
-            'price_data' => [
-                'currency'     => 'usd',
-                'unit_amount'  => $annual_total,
-                'recurring'    => [ 'interval' => 'year' ],
-                'product_data' => [ 'name' => 'JJ Pet Waste — Annual Service (10% off)' ],
-            ],
-        ] ];
-
         $session_args = [
             'customer'    => $cust_id,
             'mode'        => 'subscription',
-            'line_items'  => $line_items,
+            'line_items'  => [ [
+                'quantity'   => 1,
+                'price_data' => [
+                    'currency'     => 'usd',
+                    'unit_amount'  => $annual_total,
+                    'recurring'    => [ 'interval' => 'year' ],
+                    'product_data' => [ 'name' => 'JJ Pet Waste — Annual Service (10% off)' ],
+                ],
+            ] ],
             'success_url' => $return_url . '?booking=success&session_id={CHECKOUT_SESSION_ID}',
             'cancel_url'  => $return_url . '?booking=cancelled',
             'metadata'    => $metadata,
@@ -179,14 +181,13 @@ class StripeService {
         ];
 
         if ( $surcharge > 0 ) {
-            $session_args['line_items'][] = [
-                'quantity'   => 1,
+            $session_args['subscription_data']['add_invoice_items'] = [ [
                 'price_data' => [
                     'currency'     => 'usd',
                     'unit_amount'  => $surcharge,
                     'product_data' => [ 'name' => 'First-time cleanup surcharge' ],
                 ],
-            ];
+            ] ];
         }
 
         return Session::create( $session_args )->url;

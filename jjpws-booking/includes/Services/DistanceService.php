@@ -68,28 +68,44 @@ class DistanceService {
     }
 
     private function geocode( string $address ): ?array {
-        $api_key = $this->get_google_api_key();
         $encoded = urlencode( $address );
 
-        if ( ! empty( $api_key ) ) {
-            $url      = "https://maps.googleapis.com/maps/api/geocode/json?address={$encoded}&key={$api_key}";
-            $response = wp_remote_get( $url, [ 'timeout' => 8 ] );
+        // 1. Google Maps
+        $google_key = $this->get_google_api_key();
+        if ( ! empty( $google_key ) ) {
+            $url      = "https://maps.googleapis.com/maps/api/geocode/json?address={$encoded}&key={$google_key}";
+            $response = wp_remote_get( $url, [ 'timeout' => 8, 'user-agent' => 'JJPetWasteServices/1.0' ] );
 
             if ( ! is_wp_error( $response ) && (int) wp_remote_retrieve_response_code( $response ) === 200 ) {
                 $data = json_decode( wp_remote_retrieve_body( $response ), true );
-                if ( ! empty( $data['results'][0]['geometry']['location'] ) ) {
+                if ( ! empty( $data['results'][0]['geometry']['location'] ) && ( $data['status'] ?? '' ) === 'OK' ) {
                     $loc = $data['results'][0]['geometry']['location'];
                     return [ 'lat' => (float) $loc['lat'], 'lng' => (float) $loc['lng'] ];
                 }
             }
+            error_log( 'JJPWS DistanceService: Google geocode failed for business address, trying ArcGIS/Nominatim.' );
         }
 
-        // Nominatim fallback
-        $url = "https://nominatim.openstreetmap.org/search?q={$encoded}&format=json&limit=1";
-        $response = wp_remote_get( $url, [
-            'timeout'    => 8,
-            'user-agent' => 'JJPetWasteServices/1.0',
-        ] );
+        // 2. ArcGIS World Geocoder
+        $arcgis_key = $this->get_arcgis_developer_key();
+        if ( ! empty( $arcgis_key ) ) {
+            $url      = 'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates'
+                      . '?SingleLine=' . $encoded . '&f=json&maxLocations=1&token=' . urlencode( $arcgis_key );
+            $response = wp_remote_get( $url, [ 'timeout' => 10, 'user-agent' => 'JJPetWasteServices/1.0' ] );
+
+            if ( ! is_wp_error( $response ) && (int) wp_remote_retrieve_response_code( $response ) === 200 ) {
+                $data = json_decode( wp_remote_retrieve_body( $response ), true );
+                if ( ! empty( $data['candidates'][0]['location'] ) ) {
+                    $loc = $data['candidates'][0]['location'];
+                    return [ 'lat' => (float) $loc['y'], 'lng' => (float) $loc['x'] ];
+                }
+            }
+            error_log( 'JJPWS DistanceService: ArcGIS geocode failed for business address, trying Nominatim.' );
+        }
+
+        // 3. Nominatim fallback
+        $url      = "https://nominatim.openstreetmap.org/search?q={$encoded}&format=json&limit=1";
+        $response = wp_remote_get( $url, [ 'timeout' => 8, 'user-agent' => 'JJPetWasteServices/1.0' ] );
 
         if ( is_wp_error( $response ) || (int) wp_remote_retrieve_response_code( $response ) !== 200 ) {
             return null;
@@ -106,11 +122,13 @@ class DistanceService {
 
     private function get_google_api_key(): string {
         $keys = get_option( 'jjpws_api_keys', [] );
-
-        if ( is_string( $keys ) ) {
-            $keys = maybe_unserialize( $keys );
-        }
-
+        if ( is_string( $keys ) ) $keys = maybe_unserialize( $keys );
         return is_array( $keys ) ? ( $keys['google_maps'] ?? '' ) : '';
+    }
+
+    private function get_arcgis_developer_key(): string {
+        $keys = get_option( 'jjpws_api_keys', [] );
+        if ( is_string( $keys ) ) $keys = maybe_unserialize( $keys );
+        return is_array( $keys ) ? ( $keys['arcgis_developer_key'] ?? '' ) : '';
     }
 }

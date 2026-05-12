@@ -84,7 +84,7 @@
             </div>
 
             <!-- Manual lot size fallback -->
-            <div id="jjpws-lot-manual" class="jjpws-lot-manual" style="display:none;">
+            <div id="jjpws-lot-manual" class="jjpws-field jjpws-lot-manual" style="display:none;">
                 <label for="jjpws-lot-manual-select">
                     <?php esc_html_e( 'Select your approximate lot size', 'jjpws-booking' ); ?>
                     <span class="jjpws-req">*</span>
@@ -276,10 +276,22 @@
             <div id="jjpws-checkout-error" class="jjpws-error-msg" style="display:none;"></div>
 
             <?php
-            $jjpws_resume_url    = add_query_arg( 'jjpws_resume', '1', get_permalink() );
-            $jjpws_login_url     = wp_login_url( $jjpws_resume_url );
-            $jjpws_register_url  = add_query_arg( 'redirect_to', rawurlencode( $jjpws_login_url ), wp_registration_url() );
+            $jjpws_resume_url     = add_query_arg( 'jjpws_resume', '1', get_permalink() );
+            $jjpws_login_url      = wp_login_url( $jjpws_resume_url );
             $jjpws_user_logged_in = is_user_logged_in();
+
+            // Prefer WooCommerce My Account page for registration — it logs the user in
+            // immediately (no email confirmation), so the WooCommerce redirect filter can
+            // send them straight back to the booking page.
+            if ( function_exists( 'wc_get_page_permalink' ) ) {
+                $wc_account_url      = wc_get_page_permalink( 'myaccount' );
+                $jjpws_register_url  = $wc_account_url
+                    ? add_query_arg( 'jjpws_resume', '1', $wc_account_url )
+                    : $jjpws_login_url;
+            } else {
+                // Fall back to standard WP login (user can click the register link there).
+                $jjpws_register_url = $jjpws_login_url;
+            }
             ?>
 
             <!-- Auth gate: shown to visitors who are NOT yet logged in ──── -->

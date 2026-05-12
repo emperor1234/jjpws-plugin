@@ -291,7 +291,28 @@
                             <p class="description" style="color:green;">✓ Saved. Leave blank to keep.</p>
                         <?php endif; ?>
                         <p class="description">
-                            <?php esc_html_e( 'Used for address autocomplete and geocoding (street address → lat/lng). Without it, free Nominatim/OpenStreetMap is used as a fallback (slower, less accurate).', 'jjpws-booking' ); ?>
+                            <?php esc_html_e( 'Used for address autocomplete (Places) and geocoding. Requires: Geocoding API, Maps JavaScript API, Places API. Without it, ArcGIS or Nominatim/OpenStreetMap is used as a fallback.', 'jjpws-booking' ); ?>
+                        </p>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2 style="margin-top:2em;"><?php esc_html_e( 'ArcGIS Developer API', 'jjpws-booking' ); ?></h2>
+        <p class="description">
+            <?php esc_html_e( 'Your ArcGIS Developer API key from developers.arcgis.com. Create a free account, open the Dashboard, click "Create an API Key", and enable the Geocoding and Routing privileges. This key powers address geocoding (finding lat/lng from a street address) and is used as a fallback when Google Maps geocoding is unavailable.', 'jjpws-booking' ); ?>
+        </p>
+        <table class="form-table">
+            <tbody>
+                <tr>
+                    <th><?php esc_html_e( 'ArcGIS Developer API Key', 'jjpws-booking' ); ?></th>
+                    <td>
+                        <input type="password" name="arcgis_developer_key" class="regular-text" autocomplete="off" placeholder="AAPKxxxxxxxxxxxxxxxxxxxxxxxx" />
+                        <?php if ( ! empty( $keys['arcgis_developer_key'] ) ) : ?>
+                            <p class="description" style="color:green;">✓ Saved. Leave blank to keep.</p>
+                        <?php endif; ?>
+                        <p class="description">
+                            <?php esc_html_e( 'Geocoding priority: Google Maps → ArcGIS World Geocoder → Nominatim (OpenStreetMap). Enter your ArcGIS key here to use the ArcGIS World Geocoder when Google Maps is unavailable or not configured.', 'jjpws-booking' ); ?>
                         </p>
                     </td>
                 </tr>
