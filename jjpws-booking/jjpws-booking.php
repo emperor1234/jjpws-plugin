@@ -3,7 +3,7 @@
  * Plugin Name: JJ Pet Waste Booking System
  * Plugin URI:  https://jjpetwasteservices.com
  * Description: Smart booking & Stripe subscription system for JJ Pet Waste Services.
- * Version:     1.2.5
+ * Version:     1.2.6
  * Author:      William
  * Text Domain: jjpws-booking
  * Domain Path: /languages
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'JJPWS_VERSION', '1.2.5' );
+define( 'JJPWS_VERSION', '1.2.6' );
 define( 'JJPWS_PLUGIN_FILE', __FILE__ );
 define( 'JJPWS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'JJPWS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
