@@ -68,7 +68,8 @@ class BookingController {
                     'lot_size_label'    => null,
                     'requires_quote'    => false,
                     'source'            => 'manual_required',
-                    'message'           => "We couldn't auto-detect your lot size. Please select it below.",
+                    'lookup_message'    => 'Address not recognized — please check the street, city, state, and ZIP code.',
+                    'lookup_type'       => 'warn',
                 ] ) );
             }
 
@@ -76,7 +77,13 @@ class BookingController {
                 ? LotSizeClassifier::requires_quote( $lot['tier'] )
                 : false;
 
-            wp_send_json_success( array_merge( $response, [
+            $extra = [];
+            if ( ( $lot['source'] ?? '' ) === 'manual_required' ) {
+                $extra['lookup_message'] = 'We found your address but couldn\'t look up your parcel size automatically. Please select your approximate lot size below.';
+                $extra['lookup_type']    = 'info';
+            }
+
+            wp_send_json_success( array_merge( $response, $extra, [
                 'lot_size_sqft'     => $lot['sqft'],
                 'lot_size_acres'    => $lot['acres'],
                 'lot_size_category' => $lot['tier'],

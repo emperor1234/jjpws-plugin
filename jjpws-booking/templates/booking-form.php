@@ -83,6 +83,9 @@
                 </p>
             </div>
 
+            <!-- Lot lookup status notice (shown when lookup fails or falls back) -->
+            <div id="jjpws-lot-notice" style="display:none;"></div>
+
             <!-- Manual lot size fallback -->
             <div id="jjpws-lot-manual" class="jjpws-field jjpws-lot-manual" style="display:none;">
                 <label for="jjpws-lot-manual-select">

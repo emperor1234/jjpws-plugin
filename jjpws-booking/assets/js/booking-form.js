@@ -89,6 +89,8 @@
             const json = await post('jjpws_lookup_lot_size', { street, city, state: st, zip });
 
             if (!json.success) {
+                const msg = json.data?.message || 'Lot size lookup failed. Please select your lot size below.';
+                showLotNotice(msg, 'warn');
                 showLotManual();
                 return;
             }
@@ -107,6 +109,7 @@
             if (d.out_of_range) {
                 hideLotResolved();
                 hideLotManual();
+                hideLotNotice();
                 showQuotePrompt(
                     'out_of_range',
                     `Your address is approximately ${d.distance_miles} miles from us, beyond our ${d.max_miles}-mile service radius.`
@@ -118,6 +121,7 @@
 
             // Lot size (auto or manual)
             if (d.source === 'manual_required' || !d.lot_size_category) {
+                if (d.lookup_message) showLotNotice(d.lookup_message, d.lookup_type || 'info');
                 showLotManual();
                 if (d.distance_miles !== null) showDistanceOnly(d);
             } else {
@@ -130,6 +134,7 @@
                 setHiddenLot(d);
                 showLotResolved(d);
                 hideLotManual();
+                hideLotNotice();
 
                 // 1.5+ acres → quote
                 if (d.requires_quote) {
@@ -138,7 +143,7 @@
                 }
             }
         } catch (e) {
-            console.error('JJPWS lot lookup error:', e);
+            showLotNotice('Connection error — please check your internet and try again.', 'warn');
             showLotManual();
         } finally {
             showLotLoading(false);
@@ -193,6 +198,19 @@
 
     function hideLotManual() {
         $('jjpws-lot-manual').style.display = 'none';
+    }
+
+    function showLotNotice(message, type = 'info') {
+        const el = $('jjpws-lot-notice');
+        if (!el) return;
+        el.className = `jjpws-lot-notice jjpws-lot-notice--${type}`;
+        el.textContent = message;
+        el.style.display = 'flex';
+    }
+
+    function hideLotNotice() {
+        const el = $('jjpws-lot-notice');
+        if (el) el.style.display = 'none';
     }
 
     function showLotLoading(show) {
