@@ -17,12 +17,26 @@ class LotSizeService {
         $coords = $this->geocode( $street, $city, $state, $zip );
 
         if ( ! $coords ) {
+            error_log( 'JJPWS LotSizeService: all geocoding providers failed — manual fallback.' );
             return null;
         }
 
         [ 'lat' => $lat, 'lng' => $lng ] = $coords;
 
+        // 1. Admin-configured county GIS endpoint
         $acres = $this->arcgis_lookup( $lat, $lng );
+
+        // 2. ArcGIS Living Atlas USA_Parcels — national dataset, uses developer key.
+        //    Covers parcels across the US regardless of county GIS configuration.
+        if ( ( $acres === null || $acres <= 0 ) ) {
+            $arcgis_key = $this->get_arcgis_developer_key();
+            if ( ! empty( $arcgis_key ) ) {
+                $acres = $this->living_atlas_lookup( $lat, $lng, $arcgis_key );
+                if ( $acres !== null && $acres > 0 ) {
+                    error_log( "JJPWS LotSizeService: Living Atlas returned {$acres} acres." );
+                }
+            }
+        }
 
         if ( $acres !== null && $acres > 0 ) {
             $sqft  = (int) round( $acres * LotSizeClassifier::SQFT_PER_ACRE );
@@ -39,6 +53,8 @@ class LotSizeService {
                 'lng'    => $lng,
             ];
         }
+
+        error_log( "JJPWS LotSizeService: parcel lookup returned no acreage at {$lat},{$lng} — manual fallback." );
 
         return [
             'sqft'   => null,
@@ -382,6 +398,73 @@ class LotSizeService {
         }
 
         return wp_remote_retrieve_body( $response );
+    }
+
+    /**
+     * Query the ArcGIS Living Atlas USA_Parcels national dataset.
+     * Works anywhere in the US using the developer API key as the token.
+     * Acts as a universal fallback when the county GIS endpoint misses.
+     */
+    private function living_atlas_lookup( float $lat, float $lng, string $api_key ): ?float {
+        $url = 'https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/USA_Parcels/FeatureServer/0/query'
+             . '?' . http_build_query( [
+                 'geometry'       => wp_json_encode( [
+                     'x'                => $lng,
+                     'y'                => $lat,
+                     'spatialReference' => [ 'wkid' => 4326 ],
+                 ] ),
+                 'geometryType'   => 'esriGeometryPoint',
+                 'inSR'           => '4326',
+                 'spatialRel'     => 'esriSpatialRelIntersects',
+                 'outFields'      => 'LOT_SIZE_AC,CALC_ACREAGE,GIS_ACRES,ACRES,AREACALC',
+                 'returnGeometry' => 'false',
+                 'f'              => 'json',
+                 'token'          => $api_key,
+             ] );
+
+        $response = wp_remote_get( $url, [
+            'timeout'    => 10,
+            'user-agent' => 'JJPetWasteServices/1.0',
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            error_log( 'JJPWS Living Atlas HTTP error: ' . $response->get_error_message() );
+            return null;
+        }
+
+        $code = (int) wp_remote_retrieve_response_code( $response );
+        if ( $code !== 200 ) {
+            error_log( "JJPWS Living Atlas HTTP {$code}" );
+            return null;
+        }
+
+        $data = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( ! empty( $data['error'] ) ) {
+            error_log( 'JJPWS Living Atlas API error: ' . ( $data['error']['message'] ?? json_encode( $data['error'] ) ) );
+            return null;
+        }
+
+        if ( empty( $data['features'][0]['attributes'] ) ) {
+            return null;
+        }
+
+        $attrs = $data['features'][0]['attributes'];
+
+        foreach ( [ 'LOT_SIZE_AC', 'CALC_ACREAGE', 'GIS_ACRES', 'ACRES', 'AREACALC' ] as $field ) {
+            if ( isset( $attrs[ $field ] ) && is_numeric( $attrs[ $field ] ) && (float) $attrs[ $field ] > 0 ) {
+                return (float) $attrs[ $field ];
+            }
+        }
+
+        // Fuzzy: any field with "acre" in the name
+        foreach ( $attrs as $k => $v ) {
+            if ( stripos( $k, 'acre' ) !== false && is_numeric( $v ) && (float) $v > 0 ) {
+                return (float) $v;
+            }
+        }
+
+        return null;
     }
 
     private function get_google_api_key(): string {

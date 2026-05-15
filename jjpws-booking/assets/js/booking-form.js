@@ -70,7 +70,11 @@
     }
 
     // ── Lot size + distance lookup ─────────────────────────────────────────
+    let lookupInProgress = false;
+
     async function lookupLotSize() {
+        if (lookupInProgress) return;
+
         const street = $('jjpws-street')?.value.trim();
         const city   = $('jjpws-city')?.value.trim();
         const st     = $('jjpws-state')?.value.trim();
@@ -78,6 +82,7 @@
 
         if (!street || !city || !st || !/^\d{5}$/.test(zip)) return;
 
+        lookupInProgress = true;
         showLotLoading(true);
 
         try {
@@ -133,10 +138,11 @@
                 }
             }
         } catch (e) {
-            console.error(e);
+            console.error('JJPWS lot lookup error:', e);
             showLotManual();
         } finally {
             showLotLoading(false);
+            lookupInProgress = false;
         }
     }
 
@@ -620,12 +626,17 @@
     function init() {
         // Step 1
         $('jjpws-step1-next')?.addEventListener('click', async () => {
+            // Fire lookup first if the address is complete but lot tier hasn't
+            // been resolved yet and the manual selector isn't already showing.
+            // This covers the case where the user typed an address without
+            // triggering a field blur (e.g. pasted the address, clicked Continue).
+            const alreadyResolved = !!$('jjpws-lot-category')?.value;
+            const manualShowing   = $('jjpws-lot-manual')?.style.display !== 'none';
+            if (!alreadyResolved && !manualShowing) {
+                await lookupLotSize();
+            }
             if (!validateStep1()) return;
             collectStep1();
-            if (!state.lotTier) {
-                await lookupLotSize();
-                if (!state.lotTier) return;
-            }
             goToStep(2);
             fetchPrice();
         });
