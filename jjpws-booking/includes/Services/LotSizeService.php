@@ -467,6 +467,86 @@ class LotSizeService {
         return null;
     }
 
+    /**
+     * Run all three geocoding providers in waterfall order and return per-provider
+     * results so the admin diagnostic can show exactly which one succeeded or failed.
+     */
+    public function geocode_all_providers_diagnostic( string $street, string $city, string $state, string $zip ): array {
+        $google_key = $this->get_google_api_key();
+        $arcgis_key = $this->get_arcgis_developer_key();
+
+        $out = [
+            'winner'    => null,
+            'lat'       => null,
+            'lng'       => null,
+            'google'    => [ 'configured' => ! empty( $google_key ),  'tried' => false, 'success' => false, 'lat' => null, 'lng' => null, 'error' => null, 'detail' => null ],
+            'arcgis'    => [ 'configured' => ! empty( $arcgis_key ),  'tried' => false, 'success' => false, 'lat' => null, 'lng' => null, 'error' => null ],
+            'nominatim' => [ 'configured' => true,                    'tried' => false, 'success' => false, 'lat' => null, 'lng' => null, 'error' => null ],
+        ];
+
+        if ( ! empty( $google_key ) ) {
+            $out['google']['tried'] = true;
+            $diag = $this->geocode_diagnostic( $street, $city, $state, $zip );
+            $out['google']['detail'] = $diag;
+            if ( $diag['lat'] !== null ) {
+                $out['google'] = array_merge( $out['google'], [ 'success' => true, 'lat' => $diag['lat'], 'lng' => $diag['lng'] ] );
+                return array_merge( $out, [ 'winner' => 'google', 'lat' => $diag['lat'], 'lng' => $diag['lng'] ] );
+            }
+            $out['google']['error'] = $diag['error_message'] ?? 'Google geocoding failed.';
+        }
+
+        if ( ! empty( $arcgis_key ) ) {
+            $out['arcgis']['tried'] = true;
+            $result = $this->arcgis_geocode( $street, $city, $state, $zip, $arcgis_key );
+            if ( $result ) {
+                $out['arcgis'] = array_merge( $out['arcgis'], [ 'success' => true, 'lat' => $result['lat'], 'lng' => $result['lng'] ] );
+                return array_merge( $out, [ 'winner' => 'arcgis', 'lat' => $result['lat'], 'lng' => $result['lng'] ] );
+            }
+            $out['arcgis']['error'] = 'ArcGIS World Geocoder returned no candidates for this address.';
+        }
+
+        $out['nominatim']['tried'] = true;
+        $result = $this->nominatim_geocode( $street, $city, $state, $zip );
+        if ( $result ) {
+            $out['nominatim'] = array_merge( $out['nominatim'], [ 'success' => true, 'lat' => $result['lat'], 'lng' => $result['lng'] ] );
+            return array_merge( $out, [ 'winner' => 'nominatim', 'lat' => $result['lat'], 'lng' => $result['lng'] ] );
+        }
+        $out['nominatim']['error'] = 'Nominatim (OpenStreetMap) returned no results. The address may be unrecognised or too new.';
+
+        return $out;
+    }
+
+    /**
+     * Run the ArcGIS Living Atlas lookup and return diagnostic data for the admin UI.
+     */
+    public function living_atlas_diagnostic( float $lat, float $lng ): array {
+        $api_key = $this->get_arcgis_developer_key();
+        $diag    = [
+            'key_configured' => ! empty( $api_key ),
+            'tried'          => false,
+            'success'        => false,
+            'acres'          => null,
+            'error'          => null,
+        ];
+
+        if ( empty( $api_key ) ) {
+            $diag['error'] = 'No ArcGIS Developer key configured. Enter it in the ArcGIS Developer API section above to enable this national fallback.';
+            return $diag;
+        }
+
+        $diag['tried'] = true;
+        $acres = $this->living_atlas_lookup( $lat, $lng, $api_key );
+
+        if ( $acres !== null && $acres > 0 ) {
+            $diag['success'] = true;
+            $diag['acres']   = $acres;
+        } else {
+            $diag['error'] = 'The ArcGIS Living Atlas returned no parcel data for this location. The national dataset has partial coverage — some counties may not be included.';
+        }
+
+        return $diag;
+    }
+
     private function get_google_api_key(): string {
         $keys = get_option( 'jjpws_api_keys', [] );
         if ( is_string( $keys ) ) $keys = maybe_unserialize( $keys );

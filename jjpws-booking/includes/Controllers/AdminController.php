@@ -212,10 +212,9 @@ class AdminController {
     }
 
     /**
-     * Admin AJAX: run a live parcel-lookup diagnostic for a given address.
-     * Surfaces the geocoded coords, the exact ArcGIS request URL, the HTTP
-     * status, and the raw response so the admin can see exactly why a
-     * lookup is failing.
+     * Admin AJAX: run a full parcel-lookup diagnostic for a given address.
+     * Tests all three geocoding providers, county GIS, and Living Atlas
+     * and returns per-step structured results for the admin UI.
      */
     public function diagnose_parcel(): void {
         check_ajax_referer( 'jjpws_diagnose', 'nonce' );
@@ -234,22 +233,25 @@ class AdminController {
         }
 
         $service = new \JJPWS\Services\LotSizeService();
-        $geo     = $service->geocode_diagnostic( $street, $city, $state, $zip );
 
-        if ( $geo['lat'] === null ) {
-            wp_send_json_error( [
-                'stage'    => 'geocoding',
-                'message'  => $geo['error_message'] ?: 'Geocoding failed for an unknown reason.',
-                'geocode'  => $geo,
-            ] );
+        // Step 1: Try all geocoding providers
+        $geo = $service->geocode_all_providers_diagnostic( $street, $city, $state, $zip );
+
+        $county_gis   = null;
+        $living_atlas = null;
+
+        if ( $geo['lat'] !== null ) {
+            // Step 2: County GIS endpoint
+            $county_gis = $service->arcgis_lookup_diagnostic( $geo['lat'], $geo['lng'] );
+
+            // Step 3: ArcGIS Living Atlas (only if county GIS didn't find acreage)
+            $living_atlas = $service->living_atlas_diagnostic( $geo['lat'], $geo['lng'] );
         }
 
-        $parcel = $service->arcgis_lookup_diagnostic( $geo['lat'], $geo['lng'] );
-
         wp_send_json_success( [
-            'geocoded'  => [ 'lat' => $geo['lat'], 'lng' => $geo['lng'] ],
-            'geocode_detail' => $geo,
-            'parcel'    => $parcel,
+            'geocoding'    => $geo,
+            'county_gis'   => $county_gis,
+            'living_atlas' => $living_atlas,
         ] );
     }
 

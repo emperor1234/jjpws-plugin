@@ -203,7 +203,27 @@
             </tbody>
         </table>
 
-        <div id="jjpws-diag-result" style="display:none; margin:1em 0; padding:1em; background:#f6f7f7; border-left:4px solid #2c7a3d; border-radius:4px;"></div>
+        <div id="jjpws-diag-result" style="display:none; margin:1.2em 0;"></div>
+
+        <style>
+        .jjpws-diag-steps { display:flex; flex-direction:column; gap:12px; font-size:13px; }
+        .jjpws-diag-card  { background:#fff; border:1px solid #ddd; border-radius:6px; overflow:hidden; }
+        .jjpws-diag-card-head { display:flex; align-items:center; gap:10px; padding:10px 14px; font-weight:600; font-size:13px; }
+        .jjpws-diag-card-head.pass  { background:#f0fdf4; border-bottom:1px solid #bbf7d0; color:#166534; }
+        .jjpws-diag-card-head.fail  { background:#fef2f2; border-bottom:1px solid #fecaca; color:#991b1b; }
+        .jjpws-diag-card-head.warn  { background:#fffbeb; border-bottom:1px solid #fde68a; color:#92400e; }
+        .jjpws-diag-card-head.skip  { background:#f9fafb; border-bottom:1px solid #e5e7eb; color:#6b7280; }
+        .jjpws-diag-card-body { padding:10px 14px; }
+        .jjpws-diag-card-body p  { margin:.35em 0; }
+        .jjpws-diag-fix { margin-top:8px; padding:7px 10px; background:#fff8e1; border-left:3px solid #f59e0b; border-radius:3px; font-size:12px; }
+        .jjpws-diag-fix strong { color:#92400e; }
+        .jjpws-diag-provider-row { display:flex; align-items:baseline; gap:6px; padding:3px 0; border-bottom:1px solid #f3f4f6; }
+        .jjpws-diag-provider-row:last-child { border-bottom:none; }
+        .jjpws-diag-badge { display:inline-block; padding:1px 7px; border-radius:9px; font-size:11px; font-weight:600; white-space:nowrap; }
+        .jjpws-diag-badge.ok   { background:#dcfce7; color:#166534; }
+        .jjpws-diag-badge.err  { background:#fee2e2; color:#991b1b; }
+        .jjpws-diag-badge.skip { background:#f3f4f6; color:#6b7280; }
+        </style>
 
         <script>
         (function () {
@@ -216,7 +236,7 @@
                 btn.disabled = true;
                 btn.textContent = 'Running…';
                 out.style.display = 'block';
-                out.innerHTML = '<em>Looking up…</em>';
+                out.innerHTML = '<p style="color:#555;padding:8px 0;"><em>Testing all providers — this can take up to 15 seconds…</em></p>';
 
                 const fd = new FormData();
                 fd.append('action', 'jjpws_diagnose_parcel');
@@ -229,53 +249,212 @@
                 try {
                     const res  = await fetch(ajaxUrl, { method: 'POST', body: fd });
                     const json = await res.json();
-                    out.innerHTML = renderDiag(json);
+                    out.innerHTML = json.success ? renderDiag(json.data) : renderError(json.data);
                 } catch (e) {
-                    out.innerHTML = '<strong style="color:red;">Network error:</strong> ' + e.message;
+                    out.innerHTML = card('fail', '⚠ Network Error', `<p>Could not reach the server. Check your internet connection and try again.</p><p style="font-size:11px;color:#999;">${esc(e.message)}</p>`);
                 } finally {
                     btn.disabled = false;
                     btn.textContent = 'Run Diagnostic';
                 }
             });
 
-            function renderDiag(json) {
-                if (!json.success) {
-                    let html = `<h4 style="color:#c0392b; margin-top:0;">✗ Failed at ${json.data?.stage || 'unknown'} stage</h4>`;
-                    html += `<p>${escapeHtml(json.data?.message || 'Unknown error')}</p>`;
-                    if (json.data?.geocode) {
-                        const g = json.data.geocode;
-                        html += `<details style="margin-top:.8em;"><summary><strong>Geocoding details</strong></summary>`;
-                        html += `<p>Provider: <code>${g.provider}</code></p>`;
-                        if (g.api_status) html += `<p>API status: <code>${g.api_status}</code></p>`;
-                        if (g.http_status) html += `<p>HTTP status: <code>${g.http_status}</code></p>`;
-                        html += `<p>Request URL:<br><code style="font-size:11px;word-break:break-all;">${escapeHtml(g.request_url || '')}</code></p>`;
-                        html += `</details>`;
+            /* ── helpers ─────────────────────────────────────────── */
+
+            function esc(s) {
+                return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            }
+
+            function card(status, title, body) {
+                return `<div class="jjpws-diag-card">
+                    <div class="jjpws-diag-card-head ${esc(status)}">${esc(title)}</div>
+                    <div class="jjpws-diag-card-body">${body}</div>
+                </div>`;
+            }
+
+            function badge(ok, skipLabel) {
+                if (skipLabel) return `<span class="jjpws-diag-badge skip">${esc(skipLabel)}</span>`;
+                return ok
+                    ? `<span class="jjpws-diag-badge ok">✓ Success</span>`
+                    : `<span class="jjpws-diag-badge err">✗ Failed</span>`;
+            }
+
+            function fix(msg) {
+                return `<div class="jjpws-diag-fix"><strong>How to fix:</strong> ${msg}</div>`;
+            }
+
+            function details(summary, content) {
+                return `<details style="margin-top:6px;"><summary style="cursor:pointer;font-size:12px;color:#555;">${esc(summary)}</summary><div style="margin-top:6px;">${content}</div></details>`;
+            }
+
+            /* ── main renderer ───────────────────────────────────── */
+
+            function renderError(data) {
+                return card('fail', '✗ Error', `<p>${esc(data?.message || 'Unknown error.')}</p>`);
+            }
+
+            function renderDiag(d) {
+                return `<div class="jjpws-diag-steps">
+                    ${renderGeocoding(d.geocoding)}
+                    ${d.geocoding?.lat != null ? renderCountyGIS(d.county_gis) : ''}
+                    ${d.geocoding?.lat != null ? renderLivingAtlas(d.living_atlas) : ''}
+                    ${renderOverall(d)}
+                </div>`;
+            }
+
+            /* ── Step 1: Geocoding ───────────────────────────────── */
+
+            function renderGeocoding(g) {
+                if (!g) return card('fail', 'Step 1 — Address Lookup (Geocoding)', '<p>No geocoding data returned.</p>');
+
+                const winner = g.winner;
+                let body = '';
+
+                // Provider rows
+                const providers = [
+                    { key: 'google',    label: 'Google Maps' },
+                    { key: 'arcgis',    label: 'ArcGIS World Geocoder' },
+                    { key: 'nominatim', label: 'Nominatim (OpenStreetMap)' },
+                ];
+
+                body += '<div style="margin-bottom:8px;">';
+                for (const p of providers) {
+                    const info = g[p.key];
+                    if (!info) continue;
+                    let badgeHtml, note = '';
+                    if (!info.configured && p.key !== 'nominatim') {
+                        badgeHtml = badge(false, 'Not configured');
+                        note = ' — no API key saved';
+                    } else if (!info.tried) {
+                        badgeHtml = badge(false, 'Skipped');
+                        note = ' — skipped (earlier provider succeeded)';
+                    } else if (info.success) {
+                        badgeHtml = badge(true);
+                        note = ` — found <code>${info.lat}, ${info.lng}</code>`;
+                    } else {
+                        badgeHtml = badge(false);
+                        note = info.error ? ` — ${esc(info.error)}` : '';
                     }
-                    return html;
+                    body += `<div class="jjpws-diag-provider-row">${badgeHtml} <strong>${esc(p.label)}</strong>${note}</div>`;
+
+                    // Extra Google hint if failed
+                    if (p.key === 'google' && info.tried && !info.success && info.detail) {
+                        const detail = info.detail;
+                        if (detail.api_status && detail.api_status !== 'OK') {
+                            let hint = '';
+                            if (detail.api_status === 'REQUEST_DENIED') hint = 'Your Google API key is invalid, the Geocoding API isn\'t enabled on the Cloud project, or the key has HTTP-referrer restrictions (remove them — server requests have no referrer).';
+                            else if (detail.api_status === 'OVER_QUERY_LIMIT') hint = 'You\'ve hit Google\'s rate limit or daily quota. Wait and try again, or enable billing on your Google Cloud project.';
+                            else if (detail.api_status === 'ZERO_RESULTS') hint = 'Google couldn\'t find this address. Check the spelling, or test with a different address.';
+                            if (hint) body += fix(hint);
+                        }
+                    }
+                    // ArcGIS not configured hint
+                    if (p.key === 'arcgis' && !info.configured) {
+                        body += `<div style="font-size:12px;color:#555;padding:2px 0 4px 24px;">Add your ArcGIS Developer API key in the <strong>ArcGIS Developer API</strong> section below to enable this as a geocoding fallback.</div>`;
+                    }
                 }
-                const g  = json.data.geocoded;
-                const gd = json.data.geocode_detail || {};
-                const p  = json.data.parcel;
-                let html = `<h4 style="margin-top:0; color:#2c7a3d;">✓ Geocoding</h4>`;
-                html += `<p>Lat/Lng: <code>${g.lat}, ${g.lng}</code> (provider: <code>${gd.provider || '?'}</code>)</p>`;
-                html += `<h4>Parcel Lookup</h4>`;
-                if (p.acres !== null) {
-                    html += `<p style="color:#2c7a3d;"><strong>✓ Found parcel:</strong> ${p.acres} acres (matched field: <code>${p.matched_field}</code>)</p>`;
+                body += '</div>';
+
+                if (winner) {
+                    body += `<p style="margin:.5em 0 0;"><strong>Used:</strong> ${esc(winner.charAt(0).toUpperCase() + winner.slice(1))} &mdash; coordinates: <code>${g.lat}, ${g.lng}</code></p>`;
+                    return card('pass', '✓ Step 1 — Address Found', body);
                 } else {
-                    html += `<p style="color:#c0392b;"><strong>✗ ${escapeHtml(p.error || 'No data returned')}</strong></p>`;
+                    body += fix('None of the geocoding providers could find this address. Check that the address is spelled correctly and is a real US address. If Google failed, check the API key and enabled APIs. If only Nominatim was tried, add a Google Maps or ArcGIS key for better accuracy.');
+                    return card('fail', '✗ Step 1 — Address Not Found', body);
                 }
-                html += `<details style="margin-top:1em;"><summary><strong>Request URL</strong></summary><textarea readonly rows="3" style="width:100%;font-family:monospace;font-size:11px;">${escapeHtml(p.request_url || '')}</textarea></details>`;
+            }
+
+            /* ── Step 2: County GIS ──────────────────────────────── */
+
+            function renderCountyGIS(p) {
+                if (!p) return card('skip', 'Step 2 — County GIS (skipped — geocoding failed)', '');
+
+                let body = `<p><strong>Endpoint:</strong> <code style="font-size:11px;word-break:break-all;">${esc(p.endpoint || '(none)')}</code></p>`;
+                body += `<p><strong>Acreage field setting:</strong> <code>${esc(p.configured_field || 'Acreage')}</code></p>`;
+
+                if (p.acres !== null) {
+                    body += `<p style="color:#166534;"><strong>✓ Parcel found:</strong> ${p.acres} acres (matched field: <code>${esc(p.matched_field)}</code>)</p>`;
+                    return card('pass', '✓ Step 2 — County GIS Found Parcel', body);
+                }
+
+                // Failed — give targeted guidance
+                body += `<p style="color:#991b1b;"><strong>✗ ${esc(p.error || 'No parcel data returned')}</strong></p>`;
+
+                if (!p.endpoint) {
+                    body += fix('No ArcGIS endpoint is configured. Enter your county\'s GIS query URL in the <strong>ArcGIS Query Endpoint</strong> field above and save.');
+                } else if (p.http_error) {
+                    body += fix(`The server couldn\'t reach the GIS endpoint: "${esc(p.http_error)}". Check that the URL is correct and the GIS server is online.`);
+                } else if (p.http_status && p.http_status !== 200) {
+                    body += fix(`The GIS server returned HTTP ${p.http_status}. This usually means the endpoint URL is wrong or the service is temporarily unavailable.`);
+                } else if (p.error && p.error.includes('acreage field')) {
+                    body += fix(`The parcel was found but none of its fields contained acreage. Look at the "Returned attributes" below to find the correct field name, then update the <strong>Acreage Field Name</strong> setting.`);
+                } else if (p.error && p.error.includes('outside the configured GIS')) {
+                    body += fix('This address is outside your county GIS coverage. That\'s normal if you serve multiple counties — the Living Atlas step below acts as a national fallback.');
+                } else if (!p.endpoint || p.endpoint.includes('cherokeecountyga.gov')) {
+                    body += fix('You\'re using the default Cherokee County, GA endpoint. If your customers are in a different county, update the endpoint to your county\'s ArcGIS REST URL.');
+                }
+
                 if (p.attributes) {
-                    html += `<details style="margin-top:.5em;"><summary><strong>Returned attributes</strong></summary><pre style="font-size:11px;overflow:auto;max-height:200px;">${escapeHtml(JSON.stringify(p.attributes, null, 2))}</pre></details>`;
+                    body += details('View returned parcel attributes', `<pre style="font-size:11px;overflow:auto;max-height:200px;background:#f9fafb;padding:8px;border-radius:4px;">${esc(JSON.stringify(p.attributes, null, 2))}</pre>`);
+                } else if (p.response_excerpt) {
+                    body += details('View raw response (first 1500 chars)', `<pre style="font-size:11px;overflow:auto;max-height:200px;background:#f9fafb;padding:8px;border-radius:4px;">${esc(p.response_excerpt)}</pre>`);
                 }
-                if (p.response_excerpt && !p.attributes) {
-                    html += `<details style="margin-top:.5em;"><summary><strong>Raw response (first 1500 chars)</strong></summary><pre style="font-size:11px;overflow:auto;max-height:200px;">${escapeHtml(p.response_excerpt)}</pre></details>`;
+                if (p.request_url) {
+                    body += details('View request URL', `<code style="font-size:11px;word-break:break-all;">${esc(p.request_url)}</code>`);
                 }
-                return html;
+
+                return card('fail', '✗ Step 2 — County GIS: No Parcel Found', body);
+            }
+
+            /* ── Step 3: Living Atlas ────────────────────────────── */
+
+            function renderLivingAtlas(la) {
+                if (!la) return card('skip', 'Step 3 — ArcGIS Living Atlas (skipped — geocoding failed)', '');
+
+                let body = '';
+
+                if (!la.key_configured) {
+                    body += `<p>The ArcGIS Developer API key is <strong>not configured</strong>.</p>`;
+                    body += fix('Go to the <strong>ArcGIS Developer API</strong> section below, paste your developer key and save. This enables a national parcel fallback that works for any US address.');
+                    return card('warn', '⚠ Step 3 — ArcGIS Living Atlas: Key Not Set', body);
+                }
+
+                if (la.success) {
+                    body += `<p style="color:#166534;"><strong>✓ Parcel found:</strong> ${la.acres} acres from the national Living Atlas dataset.</p>`;
+                    return card('pass', '✓ Step 3 — ArcGIS Living Atlas Found Parcel', body);
+                }
+
+                body += `<p style="color:#991b1b;"><strong>✗ ${esc(la.error || 'No parcel data returned')}</strong></p>`;
+                body += fix('The Living Atlas national dataset has partial coverage. If neither the county GIS nor Living Atlas found a parcel, the customer will see a manual lot-size selector — that\'s the intended fallback and the booking can still proceed.');
+                return card('warn', '⚠ Step 3 — ArcGIS Living Atlas: No Data', body);
+            }
+
+            /* ── Overall result ──────────────────────────────────── */
+
+            function renderOverall(d) {
+                const geo = d.geocoding;
+                const gis = d.county_gis;
+                const la  = d.living_atlas;
+
+                if (!geo || geo.lat == null) {
+                    return card('fail', '✗ Overall Result — Address Lookup Failed',
+                        '<p>The system could not determine the customer\'s location. Lot size cannot be auto-detected. Fix the geocoding errors above.</p>');
+                }
+
+                const acresFound = (gis && gis.acres != null) || (la && la.success);
+
+                if (acresFound) {
+                    const source = (gis && gis.acres != null) ? 'County GIS' : 'ArcGIS Living Atlas';
+                    const acres  = (gis && gis.acres != null) ? gis.acres : la.acres;
+                    return card('pass', '✓ Overall Result — Lot Size Auto-Detected',
+                        `<p>The booking form will automatically fill in the lot size (<strong>${acres} acres</strong>, source: ${esc(source)}). Customers at this address will not need to enter their lot size manually.</p>`);
+                }
+
+                return card('warn', '⚠ Overall Result — Manual Selection Required',
+                    `<p>Geocoding worked (address found at <code>${geo.lat}, ${geo.lng}</code>) but neither parcel source returned a lot size for this address.</p><p>Customers at this address will see a manual lot-size selector in the booking form. This is the intended fallback — the booking can still complete.</p><p>To improve coverage, fix any issues flagged in Steps 2 or 3 above.</p>`);
             }
 
             function escapeHtml(s) {
-                return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+                return esc(s);
             }
         })();
         </script>
